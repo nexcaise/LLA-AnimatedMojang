@@ -1,0 +1,19 @@
+{
+  "type": "preload-native",
+  "name": "AnimatedMojang",
+  "author": "MRUIAW (ported to Android ARM64 by universal-modder)",
+  "description": "Animated Mojang startup screen and 3D cave background for Bedrock 1.26.52.3 on LeviLaunchroid.",
+  "version": "1.0.8",
+  "entry": "libAnimatedMojang.so",
+  "icon": "icon.png",
+  "minecraft_versions": [
+    "1.26.52.3",
+    "1.26.52.03",
+    "1.26.52.*",
+    "1.26.5X.*",
+    "1.26.5X.X",
+    "1.26.*",
+    "1.26.X.X",
+    "*"
+  ]
+}

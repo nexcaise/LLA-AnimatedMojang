@@ -1,0 +1,10 @@
+build/
+*.o
+*.d
+*.log
+*.bak
+*.tmp
+.DS_Store
+.cache/
+.vscode/
+.idea/
