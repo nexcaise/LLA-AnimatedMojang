@@ -6,7 +6,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.0.9-mc26-multi] - 2026-10-14
+
+### Added & Fixed (by SpyGamingOG)
+- **Dynamic Multi-Version Runtime Integration with LowLamina**:
+  - Replaced hardcoded Bedrock RVAs with dynamic queries to `lowlamina::mcpe::getOffsets()` and `lowlamina::mcpe::getDetectedVersion()`.
+  - Full simultaneous support for both **Minecraft Bedrock 1.26.52.3** and **1.26.45.1** from a single mod binary.
+- **Resolved 1.26.45.1 59% Loading Freeze & GOT Memory Access Violation**:
+  - Dynamically routes `glClear` GOT slot hooking to `0x124C9688` on 1.26.45.1 (avoiding out-of-bounds reads into unmapped memory past ELF EOF).
+  - Dynamically binds UI navigation hooks (`StartMenuScreenModel::onOpen`, `playButton`, `settingsButton`, `realmsButton`, etc.) to exact 1.26.45.1 golden RVAs.
+- **Cleaned Screen Tech-Stack Route Queries**:
+  - Removed route pre-querying on `/pre-start` paths to ensure smooth vanilla OreUI asset loading without hang.
+
+---
+
 ## [1.0.8-mc26.52] - 2026-10-13
+
 
 ### Ported & Added (by SpyGamingOG)
 - **First Public Android ARM64 Client Release** for Minecraft Bedrock 1.26.52.3 / 1.26.45.1 on **LeviLaunchroid** (LeviLamina Android).
