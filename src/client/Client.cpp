@@ -19,6 +19,7 @@
 #include "animation/Timeline.h"
 #include "ll/api/Logger.h"
 #include "ll/api/memory/Hook.h"
+#include "lowlamina/api/mcpe/Offsets.h"
 #include "mcpe/offsets.h"
 #include "mod/MyMod.h"
 #include "scene/NativeScene.h"
@@ -503,89 +504,106 @@ void start(Config const& config, std::filesystem::path const& modDirectory) {
     }
 
     active.store(true);
-    logger().info("Installing Animated Mojang Dobby hooks using verified 1.26.52.3 ARM64 offsets...");
+    const auto& offsets = lowlamina::mcpe::getOffsets();
+    std::string ver = lowlamina::mcpe::getDetectedVersion();
+    logger().info("Installing Animated Mojang hooks for Minecraft Bedrock ", ver, "...");
 
-    // Hook 1: ui::ScreenTechStackSelector::getTechStackForScreen (RVA 0x0974E844)
-    ll::memory::hookRva(0x0974E844,
-                        reinterpret_cast<void*>(&Hooked_ScreenTechStackSelector_getTechStackForScreen),
-                        reinterpret_cast<void**>(&sOriginalGetTechStack));
+    if (offsets.getTechStackForScreen) {
+        ll::memory::hookRva(offsets.getTechStackForScreen,
+                            reinterpret_cast<void*>(&Hooked_ScreenTechStackSelector_getTechStackForScreen),
+                            reinterpret_cast<void**>(&sOriginalGetTechStack));
+    }
 
-    // Hook 2: StartMenuScreenController::$onOpen (RVA 0x0A2DF314)
-    ll::memory::hookRva(0x0A2DF314,
-                        reinterpret_cast<void*>(&Hooked_StartMenuScreenController_onOpen),
-                        reinterpret_cast<void**>(&sOriginalMenuOpen));
+    if (offsets.startMenuOnOpen) {
+        ll::memory::hookRva(offsets.startMenuOnOpen,
+                            reinterpret_cast<void*>(&Hooked_StartMenuScreenController_onOpen),
+                            reinterpret_cast<void**>(&sOriginalMenuOpen));
+    }
 
+    if (offsets.playButton) {
+        ll::memory::hookRva(offsets.playButton,
+                            reinterpret_cast<void*>(&Hooked_StartMenu_PlayButton),
+                            reinterpret_cast<void**>(&sOriginalStartMenuPlayButton));
+    }
 
-    // Hook 2a: StartMenu PlayButton (RVA 0x0A31344C)
-    ll::memory::hookRva(0x0A31344C,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_PlayButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuPlayButton));
+    if (offsets.settingsButton) {
+        ll::memory::hookRva(offsets.settingsButton,
+                            reinterpret_cast<void*>(&Hooked_StartMenu_SettingsButton),
+                            reinterpret_cast<void**>(&sOriginalStartMenuSettingsButton));
+    }
 
-    // Hook 2b: StartMenu SettingsButton (RVA 0x0A3171AC)
-    ll::memory::hookRva(0x0A3171AC,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_SettingsButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuSettingsButton));
+    if (offsets.realmsButton) {
+        ll::memory::hookRva(offsets.realmsButton,
+                            reinterpret_cast<void*>(&Hooked_StartMenu_RealmsButton),
+                            reinterpret_cast<void**>(&sOriginalStartMenuRealmsButton));
+    }
 
-    // Hook 2c: StartMenu RealmsButton (RVA 0x0A3174DC)
-    ll::memory::hookRva(0x0A3174DC,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_RealmsButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuRealmsButton));
+    if (offsets.dressingRoomButton) {
+        ll::memory::hookRva(offsets.dressingRoomButton,
+                            reinterpret_cast<void*>(&Hooked_StartMenu_DressingRoomButton),
+                            reinterpret_cast<void**>(&sOriginalStartMenuDressingRoomButton));
+    }
 
-    // Hook 2d: StartMenu DressingRoomButton (RVA 0x0A31815C)
-    ll::memory::hookRva(0x0A31815C,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_DressingRoomButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuDressingRoomButton));
+    if (offsets.marketplaceButton) {
+        ll::memory::hookRva(offsets.marketplaceButton,
+                            reinterpret_cast<void*>(&Hooked_StartMenu_MarketplaceButton),
+                            reinterpret_cast<void**>(&sOriginalStartMenuMarketplaceButton));
+    }
 
-    // Hook 2e: StartMenu MarketplaceButton (RVA 0x0A3187A4)
-    ll::memory::hookRva(0x0A3187A4,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_MarketplaceButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuMarketplaceButton));
+    if (offsets.menuExit) {
+        ll::memory::hookRva(offsets.menuExit,
+                            reinterpret_cast<void*>(&Hooked_Menu_Exit),
+                            reinterpret_cast<void**>(&sOriginalMenuExit));
+    }
 
-    // Hook 2f: Menu Back/Exit Button (RVA 0x0A567540)
-    ll::memory::hookRva(0x0A567540,
-                        reinterpret_cast<void*>(&Hooked_Menu_Exit),
-                        reinterpret_cast<void**>(&sOriginalMenuExit));
+    if (offsets.progressBarRender) {
+        ll::memory::hookRva(offsets.progressBarRender,
+                            reinterpret_cast<void*>(&Hooked_ProgressBarRenderer_render),
+                            reinterpret_cast<void**>(&sOriginalProgressRender));
+    }
 
-    // Hook 3: ProgressBarRenderer::$render (RVA 0x09685F70)
-    ll::memory::hookRva(0x09685F70,
-                        reinterpret_cast<void*>(&Hooked_ProgressBarRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalProgressRender));
+    if (offsets.panoramaRender) {
+        ll::memory::hookRva(offsets.panoramaRender,
+                            reinterpret_cast<void*>(&Hooked_PanoramaRenderer_render),
+                            reinterpret_cast<void**>(&sOriginalPanoramaRender));
+    }
 
-    // Hook 4: PanoramaRenderer::$render (RVA 0x0967FA98)
-    ll::memory::hookRva(0x0967FA98,
-                        reinterpret_cast<void*>(&Hooked_PanoramaRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalPanoramaRender));
+    if (offsets.cubemapBackgroundRender) {
+        ll::memory::hookRva(offsets.cubemapBackgroundRender,
+                            reinterpret_cast<void*>(&Hooked_CubemapBackgroundScreen_render),
+                            reinterpret_cast<void**>(&sOriginalCubemapRender));
+    }
 
-    // Hook 5: CubemapBackgroundScreen::$render (RVA 0x09B7C9E0)
-    ll::memory::hookRva(0x09B7C9E0,
-                        reinterpret_cast<void*>(&Hooked_CubemapBackgroundScreen_render),
-                        reinterpret_cast<void**>(&sOriginalCubemapRender));
+    if (offsets.cubemapFaceSubmit) {
+        ll::memory::hookRva(offsets.cubemapFaceSubmit,
+                            reinterpret_cast<void*>(&Hooked_CubemapFaceSubmit),
+                            reinterpret_cast<void**>(&sOriginalCubemapFaceSubmit));
+    }
 
-    // Hook 6: CubemapFaceSubmit (RVA 0x09B7B544)
-    ll::memory::hookRva(0x09B7B544,
-                        reinterpret_cast<void*>(&Hooked_CubemapFaceSubmit),
-                        reinterpret_cast<void**>(&sOriginalCubemapFaceSubmit));
+    if (offsets.cubemapRendererRender) {
+        ll::memory::hookRva(offsets.cubemapRendererRender,
+                            reinterpret_cast<void*>(&Hooked_CubemapRenderer_render),
+                            reinterpret_cast<void**>(&sOriginalCubemapRenderer));
+    }
 
-    // Hook 7: CubemapRenderer Loop (RVA 0x09B7C0B4)
-    ll::memory::hookRva(0x09B7C0B4,
-                        reinterpret_cast<void*>(&Hooked_CubemapRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalCubemapRenderer));
+    if (offsets.mainMenuCubemapPass) {
+        ll::memory::hookRva(offsets.mainMenuCubemapPass,
+                            reinterpret_cast<void*>(&Hooked_MainMenuCubemapPass),
+                            reinterpret_cast<void**>(&sOriginalMainMenuCubemapPass));
+    }
 
-    // Hook 7b: MainMenu Cubemap Pass (RVA 0x0B2DC860)
-    ll::memory::hookRva(0x0B2DC860,
-                        reinterpret_cast<void*>(&Hooked_MainMenuCubemapPass),
-                        reinterpret_cast<void**>(&sOriginalMainMenuCubemapPass));
+    if (offsets.cubemapDraw) {
+        ll::memory::hookRva(offsets.cubemapDraw,
+                            reinterpret_cast<void*>(&Hooked_CubemapDraw),
+                            reinterpret_cast<void**>(&sOriginalCubemapDraw));
+    }
 
-    // Hook 7c: Direct Cubemap Geometry Draw (RVA 0x0B29A6AC)
-    ll::memory::hookRva(0x0B29A6AC,
-                        reinterpret_cast<void*>(&Hooked_CubemapDraw),
-                        reinterpret_cast<void**>(&sOriginalCubemapDraw));
-
-    // Hook 8: glClear via GOT relocation (RVA 0x132893d8) on GPU Render Thread
-    if (hookGotSlot(GL_CLEAR_GOT_RVA,
-                    reinterpret_cast<void*>(&Hooked_glClear),
-                    reinterpret_cast<void**>(&sOriginalGlClear))) {
-        logger().info("Hooked glClear via GOT relocation at RVA 0x", std::hex, GL_CLEAR_GOT_RVA);
+    if (offsets.glClearGotRva) {
+        if (hookGotSlot(offsets.glClearGotRva,
+                        reinterpret_cast<void*>(&Hooked_glClear),
+                        reinterpret_cast<void**>(&sOriginalGlClear))) {
+            logger().info("Hooked glClear via GOT relocation at RVA 0x", std::hex, offsets.glClearGotRva);
+        }
     }
 
     logger().info("Animated Mojang hooks successfully installed!");
