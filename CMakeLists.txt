@@ -10,12 +10,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=hidden -fvisibility-inlines
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/levilamina_loader/include
+    /home/devroom/LowLamina/include
     /usr/include
 )
 
 link_directories(
+    /home/devroom/LowLamina/build
     /system/lib64
     /data/data/com.termux/files/usr/lib
 )
@@ -25,11 +25,7 @@ set(SOURCES
     src/client/Client.cpp
     src/scene/NativeScene.cpp
     src/scene/CaveGlesRenderer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/levilamina_loader/src/Hook.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/levilamina_loader/src/Logger.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../runtime/levilamina_loader/src/EventBus.cpp
 )
-
 
 add_library(AnimatedMojang SHARED ${SOURCES})
 
@@ -39,5 +35,4 @@ set_target_properties(AnimatedMojang PROPERTIES
     SUFFIX ".so"
 )
 
-target_link_libraries(AnimatedMojang PRIVATE log dl GLESv2 EGL)
-
+target_link_libraries(AnimatedMojang PRIVATE lowlamina log dl GLESv2 EGL)
