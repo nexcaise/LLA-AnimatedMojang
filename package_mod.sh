@@ -24,7 +24,7 @@ cmake --build "${BUILD_DIR}" --config Release -- -j1
 
 echo "=== 2. Verifying Native Binary ABI Exports ==="
 if command -v nm >/dev/null 2>&1; then
-    nm -D "${BUILD_DIR}/libAnimatedMojang.so" | grep -E "(PLGetModRegistration|_ZNSt6__ndk113__hash_memory|_ZNSt6__ndk112__next_prime)"
+    nm -D "${BUILD_DIR}/libAnimatedMojang.so" | grep -E "PLGetModRegistration"
 fi
 
 echo "=== 3. Packaging LeviLaunchroid Distribution ==="
@@ -32,7 +32,6 @@ rm -rf "${SCRIPT_DIR}/dist"
 mkdir -p "${DIST_DIR}"
 
 cp -f "${BUILD_DIR}/libAnimatedMojang.so" "${DIST_DIR}/"
-cp -f "/home/devroom/LowLamina/build/liblowlamina.so" "${DIST_DIR}/" 2>/dev/null || true
 cp -f "${SCRIPT_DIR}/manifest.json" "${DIST_DIR}/"
 cp -f "${SCRIPT_DIR}/icon.png" "${DIST_DIR}/"
 cp -rf "${SCRIPT_DIR}/config" "${DIST_DIR}/"
@@ -82,7 +81,6 @@ do
         mod_dir="${profile_dir}/AnimatedMojang"
         mkdir -p "${mod_dir}"
         cp -f "${DIST_DIR}/libAnimatedMojang.so" "${mod_dir}/"
-        cp -f "/home/devroom/LowLamina/build/liblowlamina.so" "${mod_dir}/" 2>/dev/null || true
         cp -f "${DIST_DIR}/manifest.json" "${mod_dir}/"
         cp -f "${DIST_DIR}/icon.png" "${mod_dir}/"
         cp -rf "${DIST_DIR}/config" "${mod_dir}/"

@@ -19,7 +19,7 @@
 #include "animation/Timeline.h"
 #include "ll/api/Logger.h"
 #include "ll/api/memory/Hook.h"
-#include "lowlamina/api/mcpe/Offsets.h"
+#include "levilamroid/api/mcpe/Offsets.h"
 #include "mcpe/offsets.h"
 #include "mod/MyMod.h"
 #include "scene/NativeScene.h"
@@ -133,11 +133,21 @@ void updatePresentation(double time, bool foregroundMenu, bool ready) {
 using GetTechStackFn = int (*)(void*, std::string const&);
 GetTechStackFn sOriginalGetTechStack = nullptr;
 
+static std::atomic<bool> sIsInWorld{false};
+static std::atomic<bool> sIsLoadingWorld{false};
+
 int Hooked_ScreenTechStackSelector_getTechStackForScreen(void* self, std::string const& name) {
     if (active.load()) {
         if (name == "/main-menu" || name == "start_screen" || name == "/pre-start"
             || name == "/start-from-template" || matches(runtime.config.menuScreenNames, name)) {
+            sIsInWorld.store(false);
+            sIsLoadingWorld.store(false);
             return 0; // TechStack::JsonUI (0)
+        } else if (name == "progress_screen" || name == "/progress" || name.find("progress") != std::string::npos) {
+            sIsLoadingWorld.store(true);
+        } else if (name == "hud_screen" || name == "in_game_play_screen" || name.find("hud") != std::string::npos) {
+            sIsInWorld.store(true);
+            sIsLoadingWorld.store(false);
         }
     }
     if (sOriginalGetTechStack) {
@@ -151,6 +161,8 @@ using MenuOpenFn = void (*)(void*);
 MenuOpenFn sOriginalMenuOpen = nullptr;
 
 void Hooked_StartMenuScreenController_onOpen(void* self) {
+    sIsInWorld.store(false);
+    sIsLoadingWorld.store(false);
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         if (runtime.enteredMenu && runtime.config.replayOnReturnToMenu) {
@@ -260,19 +272,7 @@ using ProgressRenderFn = void (*)(void*, MinecraftUIRenderContext&, void*, void*
 ProgressRenderFn sOriginalProgressRender = nullptr;
 
 void Hooked_ProgressBarRenderer_render(void* self, MinecraftUIRenderContext& ctx, void* client, void* owner, int layer) {
-    if (active.load() && runtime.config.restyleLoadingProgress && self) {
-        auto* primary = reinterpret_cast<mce::Color*>(reinterpret_cast<uintptr_t>(self) + 0xC0);
-        primary->r = 239.0f / 255.0f;
-        primary->g = 50.0f / 255.0f;
-        primary->b = 61.0f / 255.0f;
-        primary->a = 1.0f;
-
-        auto* secondary = reinterpret_cast<mce::Color*>(reinterpret_cast<uintptr_t>(self) + 0xD0);
-        secondary->r = 71.0f / 255.0f;
-        secondary->g = 29.0f / 255.0f;
-        secondary->b = 34.0f / 255.0f;
-        secondary->a = 1.0f;
-    }
+    // Safe pass-through to original progress renderer without corrupting memory
     if (sOriginalProgressRender) {
         sOriginalProgressRender(self, ctx, client, owner, layer);
     }
@@ -283,12 +283,12 @@ using PanoramaRenderFn = void (*)(void*, MinecraftUIRenderContext&, void*, void*
 PanoramaRenderFn sOriginalPanoramaRender = nullptr;
 
 void Hooked_PanoramaRenderer_render(void* self, MinecraftUIRenderContext& ctx, void* client, void* owner, int layer) {
-    if (active.load() && runtime.config.caveBackground) {
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
         static uint32_t sDropPano = 0;
         if (++sDropPano % 180 == 1) {
             logger().info("Hooked_PanoramaRenderer_render (0x0967FA98): Suppressed vanilla panorama rendering!");
         }
-        return; // Suppress vanilla panorama rendering completely!
+        return; // Suppress vanilla panorama rendering in main menu!
     }
     if (sOriginalPanoramaRender) {
         sOriginalPanoramaRender(self, ctx, client, owner, layer);
@@ -300,12 +300,12 @@ using CubemapRenderFn = void (*)(void*, ScreenContext&, const void*);
 CubemapRenderFn sOriginalCubemapRender = nullptr;
 
 void Hooked_CubemapBackgroundScreen_render(void* self, ScreenContext& ctx, const void* frameObject) {
-    if (active.load() && runtime.config.caveBackground) {
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
         static uint32_t sDropScreen = 0;
         if (++sDropScreen % 180 == 1) {
             logger().info("Hooked_CubemapBackgroundScreen_render (0x09B7C9E0): Suppressed vanilla cubemap background screen!");
         }
-        return; // Suppress vanilla cubemap background screen completely!
+        return; // Suppress vanilla cubemap background screen in main menu!
     }
     if (sOriginalCubemapRender) {
         sOriginalCubemapRender(self, ctx, frameObject);
@@ -317,12 +317,12 @@ using CubemapFaceSubmitFn = void (*)(void*, void*, void*, void*);
 CubemapFaceSubmitFn sOriginalCubemapFaceSubmit = nullptr;
 
 void Hooked_CubemapFaceSubmit(void* a1, void* a2, void* a3, void* a4) {
-    if (active.load() && runtime.config.caveBackground) {
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
         static uint32_t sDropFace = 0;
         if (++sDropFace % 360 == 1) {
             logger().info("Hooked_CubemapFaceSubmit (0x09B7B544): Suppressed RenderDragon 6-face Ancient City cubemap submission!");
         }
-        return; // Suppress RenderDragon 6-face Ancient City cubemap submission completely!
+        return; // Suppress main menu cubemap only!
     }
     if (sOriginalCubemapFaceSubmit) {
         sOriginalCubemapFaceSubmit(a1, a2, a3, a4);
@@ -334,12 +334,12 @@ using CubemapRendererFn = void (*)(void*, void*, void*, void*);
 CubemapRendererFn sOriginalCubemapRenderer = nullptr;
 
 void Hooked_CubemapRenderer_render(void* a1, void* a2, void* a3, void* a4) {
-    if (active.load() && runtime.config.caveBackground) {
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
         static uint32_t sDropRender = 0;
         if (++sDropRender % 180 == 1) {
             logger().info("Hooked_CubemapRenderer_render (0x09B7C0B4): Suppressed cubemap loop render pass!");
         }
-        return; // Suppress entire cubemap render loop!
+        return; // Suppress main menu cubemap only!
     }
     if (sOriginalCubemapRenderer) {
         sOriginalCubemapRenderer(a1, a2, a3, a4);
@@ -347,18 +347,16 @@ void Hooked_CubemapRenderer_render(void* a1, void* a2, void* a3, void* a4) {
 }
 
 // 7b. Low-Level RenderDragon MainMenu Cubemap Pass (RVA 0x0B2DC860)
-// This is the continuous 60fps cubemap submission function that evaluates Option 284
-// (dev_disableRenderMainMenuCubeMap) and calls 0x0B29A6AC to draw the rotating Ancient City skybox.
 using MainMenuCubemapPassFn = void (*)(void*, void*, void*, void*, void*, void*);
 MainMenuCubemapPassFn sOriginalMainMenuCubemapPass = nullptr;
 
 void Hooked_MainMenuCubemapPass(void* a0, void* a1, void* a2, void* a3, void* a4, void* a5) {
-    if (active.load() && runtime.config.caveBackground) {
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
         static uint32_t sDropPass = 0;
         if (++sDropPass % 180 == 1) {
             logger().info("Hooked_MainMenuCubemapPass (0x0B2DC860): Suppressed RenderDragon 60fps Ancient City cubemap pass!");
         }
-        return; // Early return prevents 0x0B29A6AC from painting the cubemap over the 3D cave!
+        return;
     }
     if (sOriginalMainMenuCubemapPass) {
         sOriginalMainMenuCubemapPass(a0, a1, a2, a3, a4, a5);
@@ -370,13 +368,14 @@ using CubemapDrawFn = void (*)(void*, void*, void*, uint32_t, float, float);
 CubemapDrawFn sOriginalCubemapDraw = nullptr;
 
 void Hooked_CubemapDraw(void* a0, void* a1, void* a2, uint32_t a3, float s0, float s1) {
-    if (active.load() && runtime.config.caveBackground) {
-        return; // Suppress direct skybox cubemap geometry drawing completely!
+    if (active.load() && runtime.config.caveBackground && !sIsInWorld.load() && !sIsLoadingWorld.load()) {
+        return;
     }
     if (sOriginalCubemapDraw) {
         sOriginalCubemapDraw(a0, a1, a2, a3, s0, s1);
     }
 }
+
 
 // 8. GOT (Global Offset Table) Relocation Hook for glClear (RVA 0x132893d8)
 // Executed on the GPU Render Thread with 100% active, valid EGLContext!
@@ -420,6 +419,9 @@ void Hooked_glClear(GLbitfield mask) {
     }
 
     if ((mask & GL_COLOR_BUFFER_BIT) && active.load() && runtime.config.caveBackground) {
+        if (sIsInWorld.load() || sIsLoadingWorld.load()) {
+            return; // NEVER render cave inside world or during world loading!
+        }
         GLint vp[4] = {0, 0, 0, 0};
         glGetIntegerv(GL_VIEWPORT, vp);
         // Intercept primary full-screen framebuffer pass
@@ -504,8 +506,8 @@ void start(Config const& config, std::filesystem::path const& modDirectory) {
     }
 
     active.store(true);
-    const auto& offsets = lowlamina::mcpe::getOffsets();
-    std::string ver = lowlamina::mcpe::getDetectedVersion();
+    const auto& offsets = levilamroid::mcpe::getOffsets();
+    std::string ver = levilamroid::mcpe::getDetectedVersion();
     logger().info("Installing Animated Mojang hooks for Minecraft Bedrock ", ver, "...");
 
     if (offsets.getTechStackForScreen) {
