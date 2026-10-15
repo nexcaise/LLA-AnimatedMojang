@@ -220,6 +220,6 @@ cp -f "${SUITE_ZIP}" "/sdcard/Download/AnimatedMojang_Suite_Android.zip"
 cp -f "${SUITE_ZIP}" "/sdcard/MG/AnimatedMojang_Suite_Android.zip"
 echo "=== Created distribution suite: ${SUITE_ZIP} ==="
 
-echo "=== Successfully built, packaged, and deployed Animated Mojang v1.0.8 (Bedrock 1.26.52.3) ==="
+echo "=== Successfully built, packaged, and deployed Animated Mojang v1.0.1 (Bedrock 1.26.52.3) ==="
 
 

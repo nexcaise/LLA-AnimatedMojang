@@ -19,7 +19,9 @@
 #include "animation/Timeline.h"
 #include "ll/api/Logger.h"
 #include "ll/api/memory/Hook.h"
-#include "mcpe/offsets.h"
+#include "levilamroid/LeviLamroid.h"
+#include "ll/api/ui/UI.h"
+#include "ll/api/render/Render.h"
 #include "mod/MyMod.h"
 #include "scene/NativeScene.h"
 #include "scene/CaveCamera.h"
@@ -125,31 +127,10 @@ void updatePresentation(double time, bool foregroundMenu, bool ready) {
 }
 
 // ----------------------------------------------------------------------------
-// Reverse-Engineered Dobby Hooks (Verified for Bedrock 1.26.52.3 ARM64)
+// High-Level Human Callbacks (Driven by LeviLamroid Core Engine)
 // ----------------------------------------------------------------------------
 
-// 1. ui::ScreenTechStackSelector::getTechStackForScreen (RVA 0x0974E844)
-using GetTechStackFn = int (*)(void*, std::string const&);
-GetTechStackFn sOriginalGetTechStack = nullptr;
-
-int Hooked_ScreenTechStackSelector_getTechStackForScreen(void* self, std::string const& name) {
-    if (active.load()) {
-        if (name == "/main-menu" || name == "start_screen" || name == "/pre-start"
-            || name == "/start-from-template" || matches(runtime.config.menuScreenNames, name)) {
-            return 0; // TechStack::JsonUI (0)
-        }
-    }
-    if (sOriginalGetTechStack) {
-        return sOriginalGetTechStack(self, name);
-    }
-    return 0;
-}
-
-// 2. StartMenuScreenController::$onOpen (RVA 0x0A2DF314)
-using MenuOpenFn = void (*)(void*);
-MenuOpenFn sOriginalMenuOpen = nullptr;
-
-void Hooked_StartMenuScreenController_onOpen(void* self) {
+void onStartMenuOpen() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         if (runtime.enteredMenu && runtime.config.replayOnReturnToMenu) {
@@ -159,16 +140,9 @@ void Hooked_StartMenuScreenController_onOpen(void* self) {
         runtime.currentPage = scene::CavePage::Main;
         logger().info("StartMenu opened: Transitioning cave camera to MainMenu idle state.");
     }
-    if (sOriginalMenuOpen) {
-        sOriginalMenuOpen(self);
-    }
 }
 
-// 2a. StartMenu Direct Button Click Hooks (Exact Verified RVAs)
-using GenericButtonFn = void (*)(void*, void*, void*);
-
-GenericButtonFn sOriginalStartMenuPlayButton = nullptr;
-void Hooked_StartMenu_PlayButton(void* a0, void* a1, void* a2) {
+void onPlayButtonClicked() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("StartMenu: Play button clicked -> Switching cave camera to Worlds");
@@ -177,13 +151,9 @@ void Hooked_StartMenu_PlayButton(void* a0, void* a1, void* a2) {
             runtime.timeline.skip();
         }
     }
-    if (sOriginalStartMenuPlayButton) {
-        sOriginalStartMenuPlayButton(a0, a1, a2);
-    }
 }
 
-GenericButtonFn sOriginalStartMenuSettingsButton = nullptr;
-void Hooked_StartMenu_SettingsButton(void* a0, void* a1, void* a2) {
+void onSettingsButtonClicked() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("StartMenu: Settings button clicked -> Switching cave camera to Settings");
@@ -192,13 +162,9 @@ void Hooked_StartMenu_SettingsButton(void* a0, void* a1, void* a2) {
             runtime.timeline.skip();
         }
     }
-    if (sOriginalStartMenuSettingsButton) {
-        sOriginalStartMenuSettingsButton(a0, a1, a2);
-    }
 }
 
-GenericButtonFn sOriginalStartMenuRealmsButton = nullptr;
-void Hooked_StartMenu_RealmsButton(void* a0, void* a1, void* a2) {
+void onRealmsButtonClicked() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("StartMenu: Realms button clicked -> Switching cave camera to Realms");
@@ -207,13 +173,9 @@ void Hooked_StartMenu_RealmsButton(void* a0, void* a1, void* a2) {
             runtime.timeline.skip();
         }
     }
-    if (sOriginalStartMenuRealmsButton) {
-        sOriginalStartMenuRealmsButton(a0, a1, a2);
-    }
 }
 
-GenericButtonFn sOriginalStartMenuDressingRoomButton = nullptr;
-void Hooked_StartMenu_DressingRoomButton(void* a0, void* a1, void* a2) {
+void onDressingRoomButtonClicked() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("StartMenu: Dressing Room button clicked -> Switching cave camera to DressingRoom");
@@ -222,13 +184,9 @@ void Hooked_StartMenu_DressingRoomButton(void* a0, void* a1, void* a2) {
             runtime.timeline.skip();
         }
     }
-    if (sOriginalStartMenuDressingRoomButton) {
-        sOriginalStartMenuDressingRoomButton(a0, a1, a2);
-    }
 }
 
-GenericButtonFn sOriginalStartMenuMarketplaceButton = nullptr;
-void Hooked_StartMenu_MarketplaceButton(void* a0, void* a1, void* a2) {
+void onMarketplaceButtonClicked() {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("StartMenu: Marketplace button clicked -> Switching cave camera to Marketplace");
@@ -237,220 +195,40 @@ void Hooked_StartMenu_MarketplaceButton(void* a0, void* a1, void* a2) {
             runtime.timeline.skip();
         }
     }
-    if (sOriginalStartMenuMarketplaceButton) {
-        sOriginalStartMenuMarketplaceButton(a0, a1, a2);
-    }
 }
 
-GenericButtonFn sOriginalMenuExit = nullptr;
-void Hooked_Menu_Exit(void* a0, void* a1, void* a2) {
-    if (active.load()) {
+void onMenuExit() {
+    if (active.load() && ll::isMainMenu() && !ll::isInWorld()) {
         std::lock_guard guard(runtime.mutex);
         logger().info("Menu Back/Exit clicked -> Transitioning cave camera back to MainMenu");
         runtime.currentPage = scene::CavePage::Main;
     }
-    if (sOriginalMenuExit) {
-        sOriginalMenuExit(a0, a1, a2);
-    }
 }
 
-// 3. ProgressBarRenderer::$render (RVA 0x09685F70)
-using ProgressRenderFn = void (*)(void*, MinecraftUIRenderContext&, void*, void*, int);
-ProgressRenderFn sOriginalProgressRender = nullptr;
-
-void Hooked_ProgressBarRenderer_render(void* self, MinecraftUIRenderContext& ctx, void* client, void* owner, int layer) {
-    if (active.load() && runtime.config.restyleLoadingProgress && self) {
-        auto* primary = reinterpret_cast<mce::Color*>(reinterpret_cast<uintptr_t>(self) + 0xC0);
-        primary->r = 239.0f / 255.0f;
-        primary->g = 50.0f / 255.0f;
-        primary->b = 61.0f / 255.0f;
-        primary->a = 1.0f;
-
-        auto* secondary = reinterpret_cast<mce::Color*>(reinterpret_cast<uintptr_t>(self) + 0xD0);
-        secondary->r = 71.0f / 255.0f;
-        secondary->g = 29.0f / 255.0f;
-        secondary->b = 34.0f / 255.0f;
-        secondary->a = 1.0f;
-    }
-    if (sOriginalProgressRender) {
-        sOriginalProgressRender(self, ctx, client, owner, layer);
-    }
-}
-
-// 4. PanoramaRenderer::$render (RVA 0x0967FA98)
-using PanoramaRenderFn = void (*)(void*, MinecraftUIRenderContext&, void*, void*, int);
-PanoramaRenderFn sOriginalPanoramaRender = nullptr;
-
-void Hooked_PanoramaRenderer_render(void* self, MinecraftUIRenderContext& ctx, void* client, void* owner, int layer) {
-    if (active.load() && runtime.config.caveBackground) {
-        static uint32_t sDropPano = 0;
-        if (++sDropPano % 180 == 1) {
-            logger().info("Hooked_PanoramaRenderer_render (0x0967FA98): Suppressed vanilla panorama rendering!");
+void onPostClear(int width, int height) {
+    if (width >= 800 && height >= 450 && active.load() && runtime.config.caveBackground && ll::isMainMenu() && !ll::isInWorld()) {
+        static uint32_t sRenderCount = 0;
+        if (++sRenderCount % 180 == 1) {
+            logger().info("[GPU Render Thread] Cave post-clear render pass active (", width, "x", height, ")");
         }
-        return; // Suppress vanilla panorama rendering completely!
-    }
-    if (sOriginalPanoramaRender) {
-        sOriginalPanoramaRender(self, ctx, client, owner, layer);
-    }
-}
+        std::lock_guard guard(runtime.mutex);
+        const double time = nowMs();
+        updatePresentation(time, runtime.enteredMenu, true);
+        runtime.cameraFrame = runtime.camera.update(time, runtime.currentPage, runtime.frame);
 
-// 5. CubemapBackgroundScreen::$render (RVA 0x09B7C9E0)
-using CubemapRenderFn = void (*)(void*, ScreenContext&, const void*);
-CubemapRenderFn sOriginalCubemapRender = nullptr;
+        scene::CavePose pose = runtime.cameraFrame.pose;
+        const double motionTime = runtime.cameraFrame.motionTimeMs > 0.0 ? runtime.cameraFrame.motionTimeMs : time;
+        const auto view = scene::caveView(pose, motionTime);
+        runtime.caveRenderer.render(static_cast<float>(width), static_cast<float>(height), view, time);
 
-void Hooked_CubemapBackgroundScreen_render(void* self, ScreenContext& ctx, const void* frameObject) {
-    if (active.load() && runtime.config.caveBackground) {
-        static uint32_t sDropScreen = 0;
-        if (++sDropScreen % 180 == 1) {
-            logger().info("Hooked_CubemapBackgroundScreen_render (0x09B7C9E0): Suppressed vanilla cubemap background screen!");
-        }
-        return; // Suppress vanilla cubemap background screen completely!
-    }
-    if (sOriginalCubemapRender) {
-        sOriginalCubemapRender(self, ctx, frameObject);
-    }
-}
-
-// 6. True Engine Cubemap Face Submission Suppression (RVA 0x09B7B544)
-using CubemapFaceSubmitFn = void (*)(void*, void*, void*, void*);
-CubemapFaceSubmitFn sOriginalCubemapFaceSubmit = nullptr;
-
-void Hooked_CubemapFaceSubmit(void* a1, void* a2, void* a3, void* a4) {
-    if (active.load() && runtime.config.caveBackground) {
-        static uint32_t sDropFace = 0;
-        if (++sDropFace % 360 == 1) {
-            logger().info("Hooked_CubemapFaceSubmit (0x09B7B544): Suppressed RenderDragon 6-face Ancient City cubemap submission!");
-        }
-        return; // Suppress RenderDragon 6-face Ancient City cubemap submission completely!
-    }
-    if (sOriginalCubemapFaceSubmit) {
-        sOriginalCubemapFaceSubmit(a1, a2, a3, a4);
-    }
-}
-
-// 7. Full CubemapRenderer Render Loop Suppression (RVA 0x09B7C0B4)
-using CubemapRendererFn = void (*)(void*, void*, void*, void*);
-CubemapRendererFn sOriginalCubemapRenderer = nullptr;
-
-void Hooked_CubemapRenderer_render(void* a1, void* a2, void* a3, void* a4) {
-    if (active.load() && runtime.config.caveBackground) {
-        static uint32_t sDropRender = 0;
-        if (++sDropRender % 180 == 1) {
-            logger().info("Hooked_CubemapRenderer_render (0x09B7C0B4): Suppressed cubemap loop render pass!");
-        }
-        return; // Suppress entire cubemap render loop!
-    }
-    if (sOriginalCubemapRenderer) {
-        sOriginalCubemapRenderer(a1, a2, a3, a4);
-    }
-}
-
-// 7b. Low-Level RenderDragon MainMenu Cubemap Pass (RVA 0x0B2DC860)
-// This is the continuous 60fps cubemap submission function that evaluates Option 284
-// (dev_disableRenderMainMenuCubeMap) and calls 0x0B29A6AC to draw the rotating Ancient City skybox.
-using MainMenuCubemapPassFn = void (*)(void*, void*, void*, void*, void*, void*);
-MainMenuCubemapPassFn sOriginalMainMenuCubemapPass = nullptr;
-
-void Hooked_MainMenuCubemapPass(void* a0, void* a1, void* a2, void* a3, void* a4, void* a5) {
-    if (active.load() && runtime.config.caveBackground) {
-        static uint32_t sDropPass = 0;
-        if (++sDropPass % 180 == 1) {
-            logger().info("Hooked_MainMenuCubemapPass (0x0B2DC860): Suppressed RenderDragon 60fps Ancient City cubemap pass!");
-        }
-        return; // Early return prevents 0x0B29A6AC from painting the cubemap over the 3D cave!
-    }
-    if (sOriginalMainMenuCubemapPass) {
-        sOriginalMainMenuCubemapPass(a0, a1, a2, a3, a4, a5);
-    }
-}
-
-// 7c. Direct RenderDragon Cubemap Geometry Submission (RVA 0x0B29A6AC)
-using CubemapDrawFn = void (*)(void*, void*, void*, uint32_t, float, float);
-CubemapDrawFn sOriginalCubemapDraw = nullptr;
-
-void Hooked_CubemapDraw(void* a0, void* a1, void* a2, uint32_t a3, float s0, float s1) {
-    if (active.load() && runtime.config.caveBackground) {
-        return; // Suppress direct skybox cubemap geometry drawing completely!
-    }
-    if (sOriginalCubemapDraw) {
-        sOriginalCubemapDraw(a0, a1, a2, a3, s0, s1);
-    }
-}
-
-// 8. GOT (Global Offset Table) Relocation Hook for glClear (RVA 0x132893d8)
-// Executed on the GPU Render Thread with 100% active, valid EGLContext!
-constexpr uintptr_t GL_CLEAR_GOT_RVA = 0x132893d8;
-using GlClearFn = void (*)(GLbitfield);
-GlClearFn sOriginalGlClear = nullptr;
-static std::atomic<bool> sInsideCaveRender = false;
-
-static bool hookGotSlot(uintptr_t gotRva, void* hookFunc, void** originalFunc) {
-    uintptr_t base = ll::memory::getMinecraftBase();
-    if (!base) return false;
-
-    uintptr_t target = base + gotRva;
-    long pageSize = sysconf(_SC_PAGESIZE);
-    uintptr_t pageStart = target & ~(pageSize - 1);
-
-    if (mprotect(reinterpret_cast<void*>(pageStart), pageSize, PROT_READ | PROT_WRITE) != 0) {
-        logger().error("Failed to mprotect GOT page at 0x", std::hex, pageStart);
-        return false;
-    }
-
-    auto* slot = reinterpret_cast<void**>(target);
-    if (originalFunc) {
-        *originalFunc = *slot;
-    }
-    *slot = hookFunc;
-
-    logger().info("Installed GOT hook at RVA 0x", std::hex, gotRva,
-                  " (Original: ", originalFunc ? *originalFunc : nullptr, " -> New: ", hookFunc, ")");
-    return true;
-}
-
-void Hooked_glClear(GLbitfield mask) {
-    if (sInsideCaveRender.load()) {
-        if (sOriginalGlClear) sOriginalGlClear(mask);
-        return;
-    }
-
-    if (sOriginalGlClear) {
-        sOriginalGlClear(mask);
-    }
-
-    if ((mask & GL_COLOR_BUFFER_BIT) && active.load() && runtime.config.caveBackground) {
-        GLint vp[4] = {0, 0, 0, 0};
-        glGetIntegerv(GL_VIEWPORT, vp);
-        // Intercept primary full-screen framebuffer pass
-        if (vp[2] >= 800 && vp[3] >= 450) {
-            static uint32_t sRenderCount = 0;
-            if (++sRenderCount % 180 == 1) {
-                logger().info("[GPU Render Thread] glClear intercepted! Viewport: ", vp[2], "x", vp[3],
-                              " EGLContext: ", eglGetCurrentContext());
-            }
-            sInsideCaveRender.store(true);
-            {
-                std::lock_guard guard(runtime.mutex);
-                const double time = nowMs();
-                updatePresentation(time, runtime.enteredMenu, true);
-                runtime.cameraFrame = runtime.camera.update(time, runtime.currentPage, runtime.frame);
-
-                scene::CavePose pose = runtime.cameraFrame.pose;
-                const double motionTime = runtime.cameraFrame.motionTimeMs > 0.0 ? runtime.cameraFrame.motionTimeMs : time;
-                const auto view = scene::caveView(pose, motionTime);
-                runtime.caveRenderer.render(static_cast<float>(vp[2]), static_cast<float>(vp[3]), view, time);
-
-                // Animated Title rendering directly on GPU render thread (fallback when not using JSON UI)
-                if (runtime.currentPage == scene::CavePage::Main && runtime.frame.titleFrame >= 0 && runtime.config.minecraftTitleAnimation && !runtime.config.preferJsonMainMenu) {
-                    runtime.caveRenderer.renderTitle(
-                        static_cast<float>(vp[2]),
-                        static_cast<float>(vp[3]),
-                        runtime.frame.titleFrame,
-                        1.0f
-                    );
-                }
-            }
-            sInsideCaveRender.store(false);
+        // Animated Title rendering directly on GPU render thread (fallback when not using JSON UI)
+        if (runtime.currentPage == scene::CavePage::Main && runtime.frame.titleFrame >= 0 && runtime.config.minecraftTitleAnimation && !runtime.config.preferJsonMainMenu) {
+            runtime.caveRenderer.renderTitle(
+                static_cast<float>(width),
+                static_cast<float>(height),
+                runtime.frame.titleFrame,
+                1.0f
+            );
         }
     }
 }
@@ -503,96 +281,38 @@ void start(Config const& config, std::filesystem::path const& modDirectory) {
     }
 
     active.store(true);
-    logger().info("Installing Animated Mojang Dobby hooks using verified 1.26.52.3 ARM64 offsets...");
+    logger().info("Binding Animated Mojang to LeviLamroid human engine APIs...");
 
-    // Hook 1: ui::ScreenTechStackSelector::getTechStackForScreen (RVA 0x0974E844)
-    ll::memory::hookRva(0x0974E844,
-                        reinterpret_cast<void*>(&Hooked_ScreenTechStackSelector_getTechStackForScreen),
-                        reinterpret_cast<void**>(&sOriginalGetTechStack));
-
-    // Hook 2: StartMenuScreenController::$onOpen (RVA 0x0A2DF314)
-    ll::memory::hookRva(0x0A2DF314,
-                        reinterpret_cast<void*>(&Hooked_StartMenuScreenController_onOpen),
-                        reinterpret_cast<void**>(&sOriginalMenuOpen));
-
-
-    // Hook 2a: StartMenu PlayButton (RVA 0x0A31344C)
-    ll::memory::hookRva(0x0A31344C,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_PlayButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuPlayButton));
-
-    // Hook 2b: StartMenu SettingsButton (RVA 0x0A3171AC)
-    ll::memory::hookRva(0x0A3171AC,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_SettingsButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuSettingsButton));
-
-    // Hook 2c: StartMenu RealmsButton (RVA 0x0A3174DC)
-    ll::memory::hookRva(0x0A3174DC,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_RealmsButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuRealmsButton));
-
-    // Hook 2d: StartMenu DressingRoomButton (RVA 0x0A31815C)
-    ll::memory::hookRva(0x0A31815C,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_DressingRoomButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuDressingRoomButton));
-
-    // Hook 2e: StartMenu MarketplaceButton (RVA 0x0A3187A4)
-    ll::memory::hookRva(0x0A3187A4,
-                        reinterpret_cast<void*>(&Hooked_StartMenu_MarketplaceButton),
-                        reinterpret_cast<void**>(&sOriginalStartMenuMarketplaceButton));
-
-    // Hook 2f: Menu Back/Exit Button (RVA 0x0A567540)
-    ll::memory::hookRva(0x0A567540,
-                        reinterpret_cast<void*>(&Hooked_Menu_Exit),
-                        reinterpret_cast<void**>(&sOriginalMenuExit));
-
-    // Hook 3: ProgressBarRenderer::$render (RVA 0x09685F70)
-    ll::memory::hookRva(0x09685F70,
-                        reinterpret_cast<void*>(&Hooked_ProgressBarRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalProgressRender));
-
-    // Hook 4: PanoramaRenderer::$render (RVA 0x0967FA98)
-    ll::memory::hookRva(0x0967FA98,
-                        reinterpret_cast<void*>(&Hooked_PanoramaRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalPanoramaRender));
-
-    // Hook 5: CubemapBackgroundScreen::$render (RVA 0x09B7C9E0)
-    ll::memory::hookRva(0x09B7C9E0,
-                        reinterpret_cast<void*>(&Hooked_CubemapBackgroundScreen_render),
-                        reinterpret_cast<void**>(&sOriginalCubemapRender));
-
-    // Hook 6: CubemapFaceSubmit (RVA 0x09B7B544)
-    ll::memory::hookRva(0x09B7B544,
-                        reinterpret_cast<void*>(&Hooked_CubemapFaceSubmit),
-                        reinterpret_cast<void**>(&sOriginalCubemapFaceSubmit));
-
-    // Hook 7: CubemapRenderer Loop (RVA 0x09B7C0B4)
-    ll::memory::hookRva(0x09B7C0B4,
-                        reinterpret_cast<void*>(&Hooked_CubemapRenderer_render),
-                        reinterpret_cast<void**>(&sOriginalCubemapRenderer));
-
-    // Hook 7b: MainMenu Cubemap Pass (RVA 0x0B2DC860)
-    ll::memory::hookRva(0x0B2DC860,
-                        reinterpret_cast<void*>(&Hooked_MainMenuCubemapPass),
-                        reinterpret_cast<void**>(&sOriginalMainMenuCubemapPass));
-
-    // Hook 7c: Direct Cubemap Geometry Draw (RVA 0x0B29A6AC)
-    ll::memory::hookRva(0x0B29A6AC,
-                        reinterpret_cast<void*>(&Hooked_CubemapDraw),
-                        reinterpret_cast<void**>(&sOriginalCubemapDraw));
-
-    // Hook 8: glClear via GOT relocation (RVA 0x132893d8) on GPU Render Thread
-    if (hookGotSlot(GL_CLEAR_GOT_RVA,
-                    reinterpret_cast<void*>(&Hooked_glClear),
-                    reinterpret_cast<void**>(&sOriginalGlClear))) {
-        logger().info("Hooked glClear via GOT relocation at RVA 0x", std::hex, GL_CLEAR_GOT_RVA);
+    // 1. Force JSON UI for start menu screens via LeviLamroid
+    ll::ui::forceJsonUIForScreen("/main-menu");
+    ll::ui::forceJsonUIForScreen("start_screen");
+    ll::ui::forceJsonUIForScreen("/pre-start");
+    ll::ui::forceJsonUIForScreen("/start-from-template");
+    for (const auto& name : runtime.config.menuScreenNames) {
+        ll::ui::forceJsonUIForScreen(name);
     }
 
-    logger().info("Animated Mojang hooks successfully installed!");
+    // 2. Register UI navigation callbacks
+    ll::ui::onStartMenuOpen(&onStartMenuOpen);
+    ll::ui::onPlayButtonClicked(&onPlayButtonClicked);
+    ll::ui::onSettingsButtonClicked(&onSettingsButtonClicked);
+    ll::ui::onRealmsButtonClicked(&onRealmsButtonClicked);
+    ll::ui::onDressingRoomButtonClicked(&onDressingRoomButtonClicked);
+    ll::ui::onMarketplaceButtonClicked(&onMarketplaceButtonClicked);
+    ll::ui::onMenuExit(&onMenuExit);
+
+    // 3. Configure background suppression via LeviLamroid (active only in menu, never in world)
+    ll::render::suppressVanillaBackground(runtime.config.caveBackground);
+
+    // 4. Register post-clear GPU rendering callback for 3D cave
+    ll::render::registerPostClearCallback(&onPostClear);
+
+    logger().info("Animated Mojang successfully bound to LeviLamroid with zero hardcoded hooks!");
 }
 
 void stop() {
     active.store(false);
+    ll::render::suppressVanillaBackground(false);
     skipRequested.store(false);
     skipAllowed.store(false);
     std::lock_guard guard(runtime.mutex);

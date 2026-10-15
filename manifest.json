@@ -3,7 +3,7 @@
   "name": "AnimatedMojang",
   "author": "SpyGamingOG (original Windows mod by MRUIAW, assets by chara2015)",
   "description": "Animated Mojang title and 60 FPS 3D cave background for Minecraft Bedrock on Android ARM64. Requires LeviLamroid.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "entry": "libAnimatedMojang.so",
   "icon": "icon.png",
   "dependencies": [

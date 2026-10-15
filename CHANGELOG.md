@@ -6,6 +6,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ---
 
+## [1.0.1] - 2026-10-15
+
+### Fixed & Improved
+- **Zero Hardcoded Hooks Architecture**: Completely purged all 18 hardcoded RVAs and memory hooks from the client mod. The mod now connects purely to LeviLamroid's high-level human APIs (`ll::ui::forceJsonUIForScreen`, `ll::ui::onStartMenuOpen`, `ll::ui::onPlayButtonClicked`, `ll::render::suppressVanillaBackground`, `ll::render::registerPostClearCallback`, `ll::isInWorld()`).
+- **Launcher Dynamic Linkage Fix**: Client headers now resolve loader symbols dynamically at runtime via `dlsym`, eliminating the `cannot locate symbol "ll_ui_force_json_ui"` load failure under LeviLauncher when mods are loaded with `RTLD_LOCAL`.
+- **In-World Skybox Restoration**: Fixed 3D cave background rendering inside gameplay worlds. The mod now queries `ll::isMainMenu() && !ll::isInWorld()`, ensuring the cave background is active strictly on main menu screens and automatically disabling the post-clear pass to restore 100% vanilla skybox and RenderDragon environment rendering when in a world.
+- **Resource Pack Reload Crash Fix**: Eliminated the SIGSEGV crash when closing the Global Resources screen or reloading texture packs by removing unsafe raw memory writes.
+- **Dynamic Menu Context Switching**: Returning to the title screen from in-game or sub-menus automatically re-engages the 3D cave background and camera motion smoothly.
+
+---
+
 ## [1.0.0] - 2026-10-15
 
 ### Initial Android ARM64 Release (Ported by SpyGamingOG)
