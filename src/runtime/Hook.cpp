@@ -145,4 +145,10 @@ bool hook(void* target, void* detour, void** original) {
     return inlineHookAArch64(target, detour, original);
 }
 
+bool hookRva(uintptr_t rva, void* detour, void** original) {
+    uintptr_t base = getMinecraftBase();
+    if (!base) return false;
+    return hook(reinterpret_cast<void*>(base + rva), detour, original);
+}
+
 } // namespace ll::memory
