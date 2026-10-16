@@ -511,6 +511,8 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     float lavaOffset = static_cast<float>(std::fmod(std::floor(std::max(0.0, timeMs) / 300.0), 32.0)) * (16.0f / 768.0f);
 
     // 3. Preserve preceding OpenGL ES state
+    GLint prevViewport[4] = {0, 0, 0, 0};
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
     GLint prevVao = 0; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
     glBindVertexArray(0);
     GLint prevProgram = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
@@ -588,6 +590,7 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
     if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     glBlendFunc(prevBlendSrc, prevBlendDst);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 
     return true;
 }

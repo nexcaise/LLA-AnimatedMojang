@@ -59,15 +59,20 @@ bool MyMod::load() {
 
 
     // Synchronize global_resource_packs.json to prioritize AnimatedMojang_RP [1, 0, 8]
-    const char* globalRpPaths[] = {
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/external/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/internal/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/external/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/internal/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/external/games/com.mojang/minecraftpe/global_resource_packs.json",
+    std::vector<std::string> globalRpPaths = {
         "/sdcard/games/com.mojang/minecraftpe/global_resource_packs.json"
     };
-    for (const char* gp : globalRpPaths) {
+    std::error_code ec;
+    const std::filesystem::path baseLauncherDir = "/sdcard/Android/media/org.levimc.launcher/minecraft";
+    if (std::filesystem::exists(baseLauncherDir, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(baseLauncherDir, ec)) {
+            if (entry.is_directory(ec)) {
+                globalRpPaths.push_back((entry.path() / "internal/games/com.mojang/minecraftpe/global_resource_packs.json").string());
+                globalRpPaths.push_back((entry.path() / "external/games/com.mojang/minecraftpe/global_resource_packs.json").string());
+            }
+        }
+    }
+    for (const auto& gp : globalRpPaths) {
         try {
             nlohmann::json root = nlohmann::json::array();
             if (std::filesystem::exists(gp)) {
@@ -98,7 +103,7 @@ bool MyMod::load() {
         animated_mojang::client::prepareCave(getModDir());
     }
 
-    getLogger().info("Animated Mojang loaded and enabled successfully for Bedrock 1.26.52.3!");
+    getLogger().info("Animated Mojang loaded and enabled successfully for Bedrock!");
     return true;
 }
 

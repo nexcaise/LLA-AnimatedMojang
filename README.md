@@ -1,15 +1,15 @@
 # Animated Mojang (Android ARM64)
 
 [![Platform](https://img.shields.io/badge/Platform-Android%20ARM64-green.svg)](https://github.com/spygamingog)
-[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.52.3%20%7C%20v1.26.45.1-blue.svg)](https://minecraft.net)
-[![Mod Loader](https://img.shields.io/badge/Loader-LeviLamroid%20%3E%3Dv1.0.0--beta-orange.svg)](https://github.com/spygamingog/LeviLamroid)
-[![Version](https://img.shields.io/badge/Version-1.0.1-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android/releases)
+[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.44.3--v1.26.52.3-blue.svg)](https://minecraft.net)
+[![Mod Loader](https://img.shields.io/badge/Loader-LeviLamroid%20%3E%3Dv1.0.1--beta-orange.svg)](https://github.com/spygamingog/LeviLamroid)
+[![Version](https://img.shields.io/badge/Version-1.0.2-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android/releases)
 
 A high-performance native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)** running on **LeviLauncher (LeviLaunchroid)**.
 
 > [!IMPORTANT]
 > ### ⚠️ Mod Loader Requirement
-> **Animated Mojang Android requires [LeviLamroid](https://github.com/spygamingog/LeviLamroid) (`>= v1.0.0-beta`) installed and enabled in LeviLauncher.**  
+> **Animated Mojang Android requires [LeviLamroid](https://github.com/spygamingog/LeviLamroid) (`>= v1.0.1-beta`) installed and enabled in LeviLauncher.**  
 > LeviLamroid provides the central AArch64 hook engine, runtime version detection, and GLES render loop interception that powers this mod.
 
 ---
@@ -34,11 +34,11 @@ A high-performance native C++ client mod for **Minecraft Bedrock Edition (Androi
 
 | Component | Supported Version |
 |---|---|
-| **Minecraft Bedrock** | `1.26.52.3`, `1.26.45.1`, and compatible 1.26.x releases |
+| **Minecraft Bedrock** | `1.26.44.3`, `1.26.45.1`, `1.26.51.1`, `1.26.52.3`, and compatible 1.26.x releases |
 | **Platform** | Android ARM64 (`aarch64-linux-android`) |
-| **Required Loader** | **[LeviLamroid](https://github.com/spygamingog/LeviLamroid)** (`>= v1.0.0-beta`) |
+| **Required Loader** | **[LeviLamroid](https://github.com/spygamingog/LeviLamroid)** (`>= v1.0.1-beta`) |
 | **Target Launcher** | **LeviLauncher (LeviLaunchroid)** |
-| **Version** | `1.0.1` |
+| **Version** | `1.0.2` |
 
 ---
 
@@ -56,14 +56,17 @@ A high-performance native C++ client mod for **Minecraft Bedrock Edition (Androi
    - **Zero-Push Layout Architecture**: Parent panel `title_panel_pocket` remains at exact vanilla size `[ "55%", "18.85%x" ]`, ensuring that menu buttons remain perfectly centered. Child `title_image` scales to `[ "171.8%", "156.7%" ]` with `-30%` vertical offset, displaying the logo at 100% full vanilla size right above the Play button with exploding debris floating upward into the top margin.
 
 3. **Instant, Lag-Free Sub-Menu Camera Navigation**:
-   - Distinct, cinematic camera perspectives tailored for every menu screen:
+   - Distinct, cinematic camera perspectives tailored for every menu screen with zero sideways roll tilt:
      - **Main Start Screen**: `(31.0, 13.0, 6.0, yaw=21.0, pitch=-13.0)`
-     - **Worlds / Play Screen**: `(28.0, 12.0, 14.0, yaw=15.0, pitch=-8.0)`
-     - **Settings Screen**: `(24.0, 14.0, 25.0, yaw=30.0, pitch=-5.0)`
-     - **Realms Screen**: `(33.0, 11.0, 10.0, yaw=10.0, pitch=-15.0)`
-     - **Marketplace Screen**: `(20.0, 15.0, 35.0, yaw=45.0, pitch=-2.0)`
-     - **Dressing Room / Profile Screen**: `(35.0, 12.0, 5.0, yaw=5.0, pitch=-20.0)`
-   - Driven by LeviLamroid's high-level human UI callbacks (`ll::ui::onPlayButtonClicked`, `ll::ui::onSettingsButtonClicked`, `ll::ui::onMenuExit`, etc.) with zero hardcoded hex RVAs.
+     - **Worlds / Play Screen**: `(24.0, 15.0, 18.0, yaw=-24.0, pitch=-6.0)`
+     - **Settings Screen**: `(26.0, 14.0, 20.0, yaw=-10.0, pitch=-8.0)`
+     - **Realms Screen**: `(22.0, 14.0, 24.0, yaw=15.0, pitch=-5.0)`
+     - **Marketplace Screen**: `(18.0, 13.0, 18.0, yaw=79.0, pitch=4.0)`
+     - **Dressing Room / Profile Screen**: `(20.0, 13.0, 37.0, yaw=42.0, pitch=-4.0)`
+   - Driven by LeviLamroid's high-level human UI callbacks (`ll::ui::onPlayButtonClicked`, `ll::ui::onSettingsButtonClicked`, `ll::ui::onMenuExit`, etc.) with zero hardcoded hex RVAs and smooth cubic return-to-center glides.
+   > [!TIP]
+   > **Recommended: Pair with ForceCloseOreUI**  
+   > For the cleanest and most consistent visual experience, pairing Animated Mojang with **ForceCloseOreUI** is highly recommended. Disabling opaque OreUI web shells across screens like Dressing Room and Marketplace allows the continuous 3D cave background, real-time lighting, and cinematic camera flight paths to remain fully visible without opaque web panel obstructions.
 
 4. **Transparent Cubemap Optical Pass-Through (`AnimatedMojang_RP.mcpack`)**:
    - Overrides RenderDragon's default cubemap panorama textures with transparent assets, while LeviLamroid's `ll::render::suppressVanillaBackground` prevents vanilla cubemap rendering in menus.

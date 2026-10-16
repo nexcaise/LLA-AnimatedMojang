@@ -67,16 +67,13 @@ with zipfile.ZipFile('${LEVIPACK_OUT}', 'w', zipfile.ZIP_DEFLATED) as zf:
 )
 
 # Copy Archive and levipack to Download and MG
-cp -f "${LEVIPACK_OUT}" "/sdcard/MG/animated_mojang.levipack"
-cp -f "${LEVIPACK_OUT}" "/sdcard/Download/animated_mojang.levipack"
-cp -f "${ARCHIVE_ZIP}" "/sdcard/MG/AnimatedMojang-1.26.52.3-android-arm64.zip"
-cp -f "${ARCHIVE_ZIP}" "/sdcard/Download/AnimatedMojang-1.26.52.3-android-arm64.zip"
+cp -f "${LEVIPACK_OUT}" "/sdcard/MG/animated_mojang.levipack" 2>/dev/null || true
+cp -f "${LEVIPACK_OUT}" "/sdcard/Download/animated_mojang.levipack" 2>/dev/null || true
+cp -f "${ARCHIVE_ZIP}" "/sdcard/MG/AnimatedMojang-1.0.8-android-arm64.zip" 2>/dev/null || true
+cp -f "${ARCHIVE_ZIP}" "/sdcard/Download/AnimatedMojang-1.0.8-android-arm64.zip" 2>/dev/null || true
 
 # Auto-deploy to all active LeviLauncher profiles
-for profile_dir in \
-    "/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/mods" \
-    "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/mods"
-do
+for profile_dir in /sdcard/Android/media/org.levimc.launcher/minecraft/*/mods; do
     if [ -d "${profile_dir}" ]; then
         mod_dir="${profile_dir}/AnimatedMojang"
         mkdir -p "${mod_dir}"
@@ -110,14 +107,11 @@ done
 
 # Ensure dev_disableRenderMainMenuCubeMap:1 in all options.txt files
 python3 -c "
-import os
-for p in [
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/internal/games/com.mojang/minecraftpe/options.txt',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/external/games/com.mojang/minecraftpe/options.txt',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/internal/games/com.mojang/minecraftpe/options.txt',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/external/games/com.mojang/minecraftpe/options.txt',
-    '/sdcard/games/com.mojang/minecraftpe/options.txt'
-]:
+import os, glob
+targets = glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/*/internal/games/com.mojang/minecraftpe/options.txt') + \
+          glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/*/external/games/com.mojang/minecraftpe/options.txt') + \
+          ['/sdcard/games/com.mojang/minecraftpe/options.txt']
+for p in targets:
     if os.path.isfile(p):
         with open(p, 'r', encoding='utf-8', errors='ignore') as f:
             lines = f.readlines()
@@ -156,30 +150,29 @@ with zipfile.ZipFile('${MCPACK_OUT}', 'w', zipfile.ZIP_DEFLATED) as zf:
     cp -f "${MCPACK_OUT}" "/sdcard/MG/AnimatedMojang_RP.mcpack"
 
     # Synchronize loose AnimatedMojang_RP directly to all resource_packs folders
-    for rp_target in \
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/external/games/com.mojang/resource_packs/AnimatedMojang_RP" \
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/internal/games/com.mojang/resource_packs/AnimatedMojang_RP" \
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/external/games/com.mojang/resource_packs/AnimatedMojang_RP" \
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/internal/games/com.mojang/resource_packs/AnimatedMojang_RP" \
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/external/games/com.mojang/resource_packs/AnimatedMojang_RP" \
-        "/sdcard/games/com.mojang/resource_packs/AnimatedMojang_RP"
-    do
-        mkdir -p "${rp_target}"
-        cp -rf "${RP_SRC}/"* "${rp_target}/"
+    for profile in /sdcard/Android/media/org.levimc.launcher/minecraft/*; do
+        if [ -d "${profile}" ]; then
+            for loc in "internal" "external"; do
+                if [ -d "${profile}/${loc}" ]; then
+                    for sub in "resource_packs" "development_resource_packs"; do
+                        rp_dir="${profile}/${loc}/games/com.mojang/${sub}/AnimatedMojang_RP"
+                        mkdir -p "${rp_dir}"
+                        cp -rf "${RP_SRC}/"* "${rp_dir}/"
+                    done
+                fi
+            done
+        fi
     done
+    mkdir -p "/sdcard/games/com.mojang/resource_packs/AnimatedMojang_RP"
+    cp -rf "${RP_SRC}/"* "/sdcard/games/com.mojang/resource_packs/AnimatedMojang_RP/"
 
     # Register AnimatedMojang_RP globally in all global_resource_packs.json files
     python3 -c "
 import json, glob, os
 pack_entry = { 'pack_id': '8e4d2a10-4820-4b21-81d3-359f4d1e00a1', 'version': [1, 0, 8] }
-targets = [
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/external/games/com.mojang/minecraftpe/global_resource_packs.json',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/internal/games/com.mojang/minecraftpe/global_resource_packs.json',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/external/games/com.mojang/minecraftpe/global_resource_packs.json',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/internal/games/com.mojang/minecraftpe/global_resource_packs.json',
-    '/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/external/games/com.mojang/minecraftpe/global_resource_packs.json',
-    '/sdcard/games/com.mojang/minecraftpe/global_resource_packs.json'
-]
+targets = glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/*/internal/games/com.mojang/minecraftpe/global_resource_packs.json') + \
+          glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/*/external/games/com.mojang/minecraftpe/global_resource_packs.json') + \
+          ['/sdcard/games/com.mojang/minecraftpe/global_resource_packs.json']
 for gp in targets:
     try:
         os.makedirs(os.path.dirname(gp), exist_ok=True)
@@ -208,7 +201,7 @@ import zipfile, os
 suite_files = [
     ('${MCPACK_OUT}', 'AnimatedMojang_RP.mcpack'),
     ('${LEVIPACK_OUT}', 'animated_mojang.levipack'),
-    ('${ARCHIVE_ZIP}', 'AnimatedMojang-1.26.52.3-android-arm64.zip'),
+    ('${ARCHIVE_ZIP}', 'AnimatedMojang-1.0.8-android-arm64.zip'),
     ('${SCRIPT_DIR}/README.md', 'README.md')
 ]
 with zipfile.ZipFile('${SUITE_ZIP}', 'w', zipfile.ZIP_DEFLATED) as zf:
@@ -220,6 +213,6 @@ cp -f "${SUITE_ZIP}" "/sdcard/Download/AnimatedMojang_Suite_Android.zip"
 cp -f "${SUITE_ZIP}" "/sdcard/MG/AnimatedMojang_Suite_Android.zip"
 echo "=== Created distribution suite: ${SUITE_ZIP} ==="
 
-echo "=== Successfully built, packaged, and deployed Animated Mojang v1.0.1 (Bedrock 1.26.52.3) ==="
+echo "=== Successfully built, packaged, and deployed Animated Mojang v1.0.2 (Bedrock Multi-Version) ==="
 
 

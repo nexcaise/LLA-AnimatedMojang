@@ -15,13 +15,13 @@ namespace animated_mojang::scene {
 enum class CavePage { Main, Worlds, Settings, DressingRoom, Realms, Marketplace };
 using CavePose = std::array<float, 6>; // x, y, z, yaw, pitch, roll
 inline constexpr CavePose caveTitle{31, 13, 6, 21, -13, 0};
-inline constexpr CavePose caveWorlds{23, 17, 15, -31, 7, 5};
-inline constexpr CavePose caveSettings{23, 13, 15, -15, -13, -5};
+inline constexpr CavePose caveWorlds{24, 15, 18, -24, -6, 0};
+inline constexpr CavePose caveSettings{26, 14, 20, -10, -8, 0};
 // Dressing room frames the entrance ledge opposite the lava at (24,14,42).
 // Realms inherits the
 // previous dressing room (upstream account) view; marketplace faces the furnace.
 inline constexpr CavePose caveDressingRoom{20, 13, 37, 42, -4, 0};
-inline constexpr CavePose caveRealms{18, 13, 18, 10, 0, 1};
+inline constexpr CavePose caveRealms{22, 14, 24, 15, -5, 0};
 inline constexpr CavePose caveMarketplace{18, 13, 18, 79, 4, 0};
 inline constexpr CavePose caveOpeningStart{17, 13, 82, 0, 0, -90};
 inline constexpr CavePose caveOpeningTransfer{20, 12.8f, 44, 8, -5, -10};
@@ -173,11 +173,13 @@ public:
         clock += step;
         if (observed) motionTime += step;
         lastTime = std::max(lastTime, nowMs);
+    static constexpr double kPageTransitionDurationMs = 900.0;
+
         // Resolve the old interpolation first, so interrupted transitions never jump.
         if (transitionAt >= 0) {
-            const float t = cameraEase(static_cast<float>((clock - transitionAt) / 500.0));
+            const float t = cameraEase(static_cast<float>((clock - transitionAt) / kPageTransitionDurationMs));
             for (std::size_t i = 0; i < pose.size(); ++i) pose[i] = start[i] + (target[i] - start[i]) * t;
-            if (clock - transitionAt >= 500) transitionAt = -1;
+            if (clock - transitionAt >= kPageTransitionDurationMs) transitionAt = -1;
         }
         if (observedPage && (!observed || *observedPage != page)) {
             page = *observedPage;

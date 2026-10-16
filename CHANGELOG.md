@@ -4,9 +4,23 @@ All notable changes to the Android ARM64 port of **Animated Mojang** are documen
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and release versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-10-16
+
+### Added
+- **Multi-Version Bedrock Support**: Native verified support across Minecraft Bedrock **1.26.44.3**, **1.26.45.1**, **1.26.51.1**, and **1.26.52.3** via LeviLamroid `v1.0.1-beta`.
+- **Dynamic Profile & Resource Discovery**: Build automation and runtime configuration discovery now dynamically enumerate all active LeviLauncher profiles under `/sdcard/Android/media/org.levimc.launcher/minecraft/*/`, removing all hardcoded profile paths.
+
+### Fixed & Improved
+- **Loading Screen Cave Initialization Timing**: Prevented the 3D cave background and camera flight from triggering while Minecraft is still loading resources on the progress bar screen. The camera flight now starts cleanly at the exact moment the main menu appears, ensuring the full 4.0s cinematic entrance flight is experienced without premature triggering.
+- **Sub-Menu Camera Transitions**: Fixed frame stutter and lag across JSON UI menus (Play, Settings, Realms) by eliminating duplicate GPU cave passes during off-screen UI sub-clears. Transition duration extended to a silky-smooth 900 ms cubic ease curve across all 5 sub-menu options (pairing with ForceCloseOreUI is recommended to remove opaque web overlays on Dressing Room and Marketplace for the best visual experience).
+- **Zero-Roll Cinematic Camera Vistas**: Refined camera orientations for all sub-menus (Play, Settings, Realms, Dressing Room, Marketplace), eliminating sideways roll tilt and framing wide, illuminated cavern vistas.
+- **Return-to-Main Camera Restoration**: Closing or pressing Back on any sub-menu screen now smoothly glides the camera back to the main menu resting position (`caveTitle`) over 900 ms via synchronized `StartMenuScreenController::tick` return detection.
+- **Camera Flight Transition Smoothing**: Fixed a visual stutter where the 3D cave entrance flight snapped to the resting position in mid-motion, ensuring the camera completes its full 4.0s cinematic flight and decelerates smoothly.
+
 ---
 
 ## [1.0.1] - 2026-10-15
+
 
 ### Fixed & Improved
 - **Zero Hardcoded Hooks Architecture**: Completely purged all 18 hardcoded RVAs and memory hooks from the client mod. The mod now connects purely to LeviLamroid's high-level human APIs (`ll::ui::forceJsonUIForScreen`, `ll::ui::onStartMenuOpen`, `ll::ui::onPlayButtonClicked`, `ll::render::suppressVanillaBackground`, `ll::render::registerPostClearCallback`, `ll::isInWorld()`).

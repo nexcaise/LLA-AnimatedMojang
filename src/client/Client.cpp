@@ -86,25 +86,12 @@ public:
     ~ScopedRender() { currentScope = previous; }
 };
 
-struct BackgroundFrame {
-    bool inside = false;
-    bool native3DDrawn = false;
-    bool presentationUpdated = false;
-    bool pageResolved = false;
-};
-
-thread_local BackgroundFrame backgroundFrame;
-
 double nowMs() {
     return std::chrono::duration<double, std::milli>(Clock::now() - runtime.epoch).count();
 }
 
 auto& logger() {
     return my_mod::MyMod::getInstance().getLogger();
-}
-
-bool matches(std::vector<std::string> const& names, std::string const& name) {
-    return std::find(names.begin(), names.end(), name) != names.end();
 }
 
 void updatePresentation(double time, bool foregroundMenu, bool ready) {
@@ -206,13 +193,20 @@ void onMenuExit() {
 }
 
 void onPostClear(int width, int height) {
-    if (width >= 800 && height >= 450 && active.load() && runtime.config.caveBackground && ll::isMainMenu() && !ll::isInWorld()) {
+    if (width >= 800 && height >= 450 && active.load() && runtime.config.caveBackground && runtime.enteredMenu && ll::isMainMenu() && !ll::isInWorld() && !ll::isLoading()) {
+        const double time = nowMs();
+        static double sLastRenderMs = 0.0;
+        // Throttle cave rendering to at most once per 8ms (caps at 120 FPS, prevents duplicate clears per frame)
+        if (time - sLastRenderMs < 8.0) {
+            return;
+        }
+        sLastRenderMs = time;
+
         static uint32_t sRenderCount = 0;
         if (++sRenderCount % 180 == 1) {
             logger().info("[GPU Render Thread] Cave post-clear render pass active (", width, "x", height, ")");
         }
         std::lock_guard guard(runtime.mutex);
-        const double time = nowMs();
         updatePresentation(time, runtime.enteredMenu, true);
         runtime.cameraFrame = runtime.camera.update(time, runtime.currentPage, runtime.frame);
 
