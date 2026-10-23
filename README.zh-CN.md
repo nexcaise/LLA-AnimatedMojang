@@ -1,15 +1,26 @@
-# Animated Mojang（基岩版 Android ARM64 移植版）
+# Animated Mojang（Android ARM64 独立运行版）
 
 [![Platform](https://img.shields.io/badge/Platform-Android%20ARM64-green.svg)](https://github.com/spygamingog)
-[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.52.3%20%7C%20v1.26.45.1-blue.svg)](https://minecraft.net)
-[![Mod Loader](https://img.shields.io/badge/Loader-LeviLaunchroid%20%2F%20LeviLamina-orange.svg)](https://github.com/LiteLDev/LeviLamina)
-[![Version](https://img.shields.io/badge/Version-1.0.8--mc26.52-purple.svg)](https://github.com/spygamingog)
+[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.44.3--v1.26.52.3-blue.svg)](https://minecraft.net)
+[![Architecture](https://img.shields.io/badge/Architecture-Standalone%20Native%20C%2B%2B-orange.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
+[![Version](https://img.shields.io/badge/Version-1.0.0-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 [![README English](https://img.shields.io/badge/README-English-blue)](README.md)
 
-运行于 **LeviLaunchroid**（LeviLamina Android 版）的 **我的世界基岩版（Android ARM64）** 高性能原生 C++ 客户端模组。
+运行于 Android ARM64 平台的 **我的世界基岩版** 高性能独立原生 C++ 客户端模组。
 
-由 **[SpyGamingOG](https://github.com/spygamingog)** 移植并维护。  
-灵感源自 Java 版模组 [chara2015/animated_mojang](https://github.com/chara2015/animated_mojang) 以及 Windows x64 LeviLamina 移植版 [MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)。
+> [!NOTE]
+> ### 🚀 100% 独立架构（零资源包依赖 & 零外部加载器依赖）
+> **Animated Mojang v1.0.0 采用纯独立原生设计：**
+> - **零资源包要求**：无需安装 `.mcpack` 资源包，亦无需修改 `global_resource_packs.json`。原版全景图及远古城市天空盒的遮罩与隐藏，全部通过原生内存函数挂钩（`PanoramaRenderer::$render` 与 `CubemapBackgroundScreen::$render`）直接处理。
+> - **零外部加载器依赖**：无需安装 LeviLamroid 等辅助动态库。模组内部集成 AArch64 原生内联跳板与 GOT 重定位挂钩，直接接入基岩版底层引擎。
+
+---
+
+## 作者与致谢
+
+- **Windows x64 原作**：由 **[MRUIAW](https://github.com/MRUIAW)** ([MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)) 开发，遵循 LGPL-3.0 协议开源。
+- **Java 版原模组**：概念设计、3D 洞穴网格与动画素材由 **[chara2015](https://github.com/chara2015)** ([chara2015/animated_mojang](https://github.com/chara2015/animated_mojang)) 创作，采用 CC0 1.0 协议。
+- **Android ARM64 独立移植版**：由 **[SpyGamingOG](https://github.com/spygamingog)** 逆向分析、移植与维护。
 
 ---
 
@@ -17,7 +28,7 @@
 
 ![Animated Mojang 主界面展示](icon.png)
 
-*通过 OpenGL ES 3.0 直接渲染的 60 帧实时 3D 洞穴背景，配合硬件加速的 69 帧 Minecraft 动态标题与零延迟子菜单视角切换。*
+*通过 OpenGL ES 3.0 直接渲染的 60 帧实时 3D 洞穴背景，配合硬件加速的动态 Minecraft 标题与零延迟子菜单视角切换。*
 
 ---
 
@@ -25,11 +36,12 @@
 
 | 组件 | 支持版本 |
 |---|---|
-| **我的世界基岩版** | `1.26.52.3`、`1.26.45.1` 及兼容的 1.26.x 版本 |
+| **我的世界基岩版** | `1.26.44.3`、`1.26.45.1`、`1.26.51.1`、`1.26.52.3` 及兼容的 1.26.x 版本 |
 | **运行平台** | Android ARM64 (`aarch64-linux-android`) |
-| **模组加载器** | LeviLaunchroid（LeviLamina Android 客户端变体） |
-| **移植维护者** | [SpyGamingOG](https://github.com/spygamingog) |
-| **发布版本** | `1.0.8-mc26.52` |
+| **外部依赖** | **无**（100% 独立原生 C++） |
+| **资源包需求** | **无**（函数直接屏蔽，无需资源包） |
+| **支持的加载方式** | LeviLauncher (LeviLaunchroid)、PreLoader、Zygisk 或原生注入 |
+| **当前版本** | `1.0.0` |
 
 ---
 
@@ -40,84 +52,59 @@
    - 具备预烘焙彩色光照、动态流动熔岩 UV 滚动动画、壁挂灵魂火把以及火焰/烟雾粒子特效。
    - 自然的三次样条开场运镜，主菜单静止状态具备微幅环境呼吸晃动。
 
-2. **全屏硬件加速 69 帧 Minecraft 动态标题**：
-   - 采用基岩版原生 JSON UI 的 `aseprite_flip_book` 引擎播放 69 帧动画（`animated_title.png` + `animated_title.json`）。
-   - **零按钮位移布局架构**：父面板 `title_panel_pocket` 严格保持原版尺寸 `[ "55%", "18.85%x" ]`，确保所有主菜单按钮保持居中不被下推。子图像 `title_image` 缩放至 `[ "171.8%", "156.7%" ]` 并带 `-30%` 垂直偏移，使标题字母以 100% 原版大小精确坐落在“开始游戏”按钮上方，碎石与灵魂粒子自然向上飘入顶部空白区域。
+2. **直接函数级背景抑制（免资源包）**：
+   - 摆脱了对透明贴图资源包（`AnimatedMojang_RP`）的依赖。
+   - 内存挂钩 RenderDragon 原生渲染器（`PanoramaRenderer::$render` 位于 `0x0967FA98`，`CubemapBackgroundScreen::$render` 位于 `0x09B7C9E0`），在主菜单状态下直接静默原版天空盒。
+   - **游戏世界零干扰**：精确识别游戏世界状态（通过 `InGamePlayScreen::render` 与 `ClientInstance::requestLeaveGame`），确保只在主界面渲染洞穴，进入世界后自动关闭，还原 100% 原版天空与环境。
 
-3. **零延迟流畅子菜单运镜切换**：
-   - 为各个菜单页面量身定制的电影级镜头视角：
+3. **独立硬件加速标题动画**：
+   - 在 GPU 渲染线程上直接合成 2D 动态标题，无需繁琐的 JSON UI 复杂替换。
+   - 自动挂钩 `ui::ScreenTechStackSelector::getTechStackForScreen`（RVA `0x0974E844`），保证主界面交互顺畅。
+
+4. **零延迟子菜单运镜切换**：
+   - 为各个菜单页面量身定制的无侧倾电影级镜头视角：
      - **主界面 (Start Screen)**: `(31.0, 13.0, 6.0, yaw=21.0, pitch=-13.0)`
-     - **世界列表 (Play / Worlds)**: `(28.0, 12.0, 14.0, yaw=15.0, pitch=-8.0)`
-     - **设置界面 (Settings)**: `(24.0, 14.0, 25.0, yaw=30.0, pitch=-5.0)`
-     - **Realms 界面**: `(33.0, 11.0, 10.0, yaw=10.0, pitch=-15.0)`
-     - **商城界面 (Marketplace)**: `(20.0, 15.0, 35.0, yaw=45.0, pitch=-2.0)`
-     - **更衣室 / 档案 (Dressing Room)**: `(35.0, 12.0, 5.0, yaw=5.0, pitch=-20.0)`
-   - 采用原生按钮点击拦截（`0x0A31344C`、`0x0A3171AC` 等）与菜单退出挂钩（`0x0A567540`），杜绝路由预检引起的卡顿与视角拉扯。
-
-4. **全景透明遮罩通过管线 (`AnimatedMojang_RP.mcpack`)**：
-   - 替换 RenderDragon 默认全景图纹理为全透明图像，避免 RenderDragon 远古城市天空盒遮挡底层的 OpenGL ES 3D 洞穴。
+     - **世界列表 (Play / Worlds)**: `(24.0, 15.0, 18.0, yaw=-24.0, pitch=-6.0)`
+     - **设置界面 (Settings)**: `(26.0, 14.0, 20.0, yaw=-10.0, pitch=-8.0)`
+     - **Realms 界面**: `(22.0, 14.0, 24.0, yaw=15.0, pitch=-5.0)`
+     - **商城界面 (Marketplace)**: `(18.0, 13.0, 18.0, yaw=79.0, pitch=4.0)`
+     - **更衣室 / 档案 (Dressing Room)**: `(20.0, 13.0, 37.0, yaw=42.0, pitch=-4.0)`
+   - 直接挂钩引擎按钮事件，点击瞬间平滑转动，关闭界面即刻优雅复位。
 
 ---
 
-## 安装说明
+## 安装方法
 
-### 方式一：LeviLauncher 一键安装（推荐）
-1. 从 [最新 Release](https://github.com/spygamingog/Animated-Mojang-Android/releases) 下载 **`AnimatedMojang_Suite_Android.zip`**。
-2. 解压压缩包。
-3. 打开 **LeviLauncher** -> **模组** 标签页 -> **导入** -> 选择 **`animated_mojang.levipack`**。
-4. 在文件管理器中点击 **`AnimatedMojang_RP.mcpack`** 直接导入基岩版，或复制 `AnimatedMojang_RP` 文件夹至 `resource_packs` 目录。
-5. 在游戏 **设置** -> **全局资源** 中激活 **Animated Mojang Resources**。
-6. 通过 LeviLauncher 启动游戏即可体验！
+### 方式 1：LeviLauncher (LeviLaunchroid)
+1. 获取 **`animated_mojang.levipack`** 或 **`AnimatedMojang-1.0.0-android-arm64.zip`**。
+2. 打开 **LeviLauncher** -> **模组** -> **导入** -> 选择 **`animated_mojang.levipack`**。
+3. 确保启用 AnimatedMojang 模组。
+4. 启动 Minecraft 即可！（无需安装任何资源包）。
 
-### 方式二：手动文件夹安装
-1. 将 `AnimatedMojang` 文件夹解压至：
-   ```
-   /sdcard/Android/media/org.levimc.launcher/minecraft/<配置文件名>/mods/AnimatedMojang/
-   ```
-2. 将 `AnimatedMojang_RP` 文件夹解压至：
-   ```
-   /sdcard/Android/media/org.levimc.launcher/minecraft/<配置文件名>/external/games/com.mojang/resource_packs/AnimatedMojang_RP/
-   ```
-3. 在 `mods_config.json` 中确保 `AnimatedMojang` 的 `"enabled": true`。
-
----
-
-## 配置文件说明
-
-编辑 `mods/AnimatedMojang/config/config.json`：
-
-| 选项 | 默认值 | 作用说明 |
-|---|---|---|
-| `enabled` | `true` | 启用或禁用模组 |
-| `preferJsonMainMenu` | `true` | 使用 JSON UI 动态标题（推荐） |
-| `minecraftTitleAnimation` | `true` | 播放 69 帧标题动画开场 |
-| `caveBackground` | `true` | 渲染实时 3D 洞穴背景 |
-| `restyleLoadingProgress` | `true` | 将加载进度条重着色为绯红主题 |
-| `replayOnReturnToMenu` | `false` | 返回主菜单时重新播放开场飞行 |
-| `blockMenuInputDuringIntro` | `true` | 开场运镜期间屏蔽按键误触 |
-| `maxPresentationSeconds` | `15` | 资源加载超时保护（5–60 秒） |
-
----
-
-## 源码编译与打包
-
-### 环境需求
-- Android NDK r25+ / Clang 17+
-- CMake 3.22+
-- Python 3.10+
-
-### 编译与打包命令
-```bash
-bash package_mod.sh
+### 方式 2：手动解压安装
+将 `AnimatedMojang-1.0.0-android-arm64.zip` 解压至模组目录：
+```
+mods/AnimatedMojang/
+├── libAnimatedMojang.so
+├── manifest.json
+├── icon.png
+├── config/
+│   └── config.json
+└── resources/
+    ├── data/
+    │   └── normal_cave.mesh
+    └── textures/
+        └── animated_mojang/
 ```
 
-该脚本将自动编译 `libAnimatedMojang.so`，生成 `AnimatedMojang_RP.mcpack`，封装 `animated_mojang.levipack`，并在 `dist/` 生成开箱即用的套件包 `AnimatedMojang_Suite_Android.zip`。
-
 ---
 
-## 致谢与版权声明
+## 编译指南
 
-- **Android ARM64 移植与优化**：[SpyGamingOG](https://github.com/spygamingog)
-- **Windows x64 LeviLamina 原作者**：[MRUIAW](https://github.com/MRUIAW/Animated-Mojang)
-- **Java 版原模组作者**：[chara2015](https://github.com/chara2015/animated_mojang)
-- **Minecraft**：所有游戏素材与商标属于 Mojang AB 及微软公司。
+运行构建打包脚本即可生成全部发行文件：
+```bash
+./package_mod.sh
+```
+生成包位于 `dist/`：
+- `dist/AnimatedMojang-1.0.0-android-arm64.zip`
+- `dist/animated_mojang.levipack`

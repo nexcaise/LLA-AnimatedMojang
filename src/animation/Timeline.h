@@ -10,6 +10,7 @@ struct Timing {
     double titleDelayMs      = 0.0;
     double menuRevealMs      = 2700.0;
     double menuFadeMs        = 500.0;
+    double cameraFlightMs    = 4000.0;
     double maxPresentationMs = 15000.0;
     double maxFrameStepMs    = 100.0;
 };
@@ -44,7 +45,9 @@ public:
         if (mPhase == Phase::MenuOpening
             && (!animateTitle || mNow - mStartedAt >= mTiming.maxPresentationMs
                 || elapsed
-                       >= std::max(mTiming.menuRevealMs + mTiming.menuFadeMs, mTiming.titleDelayMs + 69.0 * 40.0))) {
+                       >= std::max({mTiming.menuRevealMs + mTiming.menuFadeMs,
+                                   mTiming.titleDelayMs + 69.0 * 40.0,
+                                   mTiming.cameraFlightMs}))) {
             mPhase = Phase::MenuIdle;
         }
         Frame result;

@@ -58,47 +58,12 @@ bool MyMod::load() {
     }
 
 
-    // Synchronize global_resource_packs.json to prioritize AnimatedMojang_RP [1, 0, 8]
-    const char* globalRpPaths[] = {
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/external/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/internal/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/external/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/internal/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/Android/media/org.levimc.launcher/minecraft/Minecraft_1.26.45.1/external/games/com.mojang/minecraftpe/global_resource_packs.json",
-        "/sdcard/games/com.mojang/minecraftpe/global_resource_packs.json"
-    };
-    for (const char* gp : globalRpPaths) {
-        try {
-            nlohmann::json root = nlohmann::json::array();
-            if (std::filesystem::exists(gp)) {
-                std::ifstream in(gp);
-                if (in.is_open()) root = nlohmann::json::parse(in, nullptr, false);
-            }
-            if (!root.is_array()) root = nlohmann::json::array();
-
-            nlohmann::json newEntry = {
-                {"pack_id", "8e4d2a10-4820-4b21-81d3-359f4d1e00a1"},
-                {"version", {1, 0, 8}}
-            };
-            nlohmann::json updated = nlohmann::json::array({newEntry});
-            for (const auto& item : root) {
-                if (item.is_object() && item.value("pack_id", "") != "8e4d2a10-4820-4b21-81d3-359f4d1e00a1") {
-                    updated.push_back(item);
-                }
-            }
-            std::filesystem::create_directories(std::filesystem::path(gp).parent_path());
-            std::ofstream out(gp);
-            out << updated.dump(2);
-        } catch (...) {}
-    }
-
-
     animated_mojang::client::start(mConfig, getModDir());
     if (mConfig.enabled && mConfig.caveBackground) {
         animated_mojang::client::prepareCave(getModDir());
     }
 
-    getLogger().info("Animated Mojang loaded and enabled successfully for Bedrock 1.26.52.3!");
+    getLogger().info("Animated Mojang loaded and enabled successfully for Bedrock!");
     return true;
 }
 
@@ -187,4 +152,33 @@ MOD_EXPORT jint JNI_OnLoad(void* /*vm*/, void* /*reserved*/) {
     my_mod::MyMod::getInstance().enable();
     return 0x00010006;
 }
-} // extern "C"
+
+// ----------------------------------------------------------------------------
+// NDK libc++ Fallback Symbols for older/differing Android dynamic linkers
+// Prevents "dlopen failed: cannot locate symbol _ZNSt6__ndk113__hash_memoryEPKvm"
+// ----------------------------------------------------------------------------
+MOD_EXPORT size_t _ZNSt6__ndk113__hash_memoryEPKvm(const void* ptr, size_t len) {
+    const auto* data = static_cast<const unsigned char*>(ptr);
+    size_t hash = 14695981039346656037ULL;
+    for (size_t i = 0; i < len; ++i) {
+        hash ^= data[i];
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+MOD_EXPORT size_t _ZNSt6__ndk112__next_primeEm(size_t n) {
+    static const size_t primes[] = {
+        53UL, 97UL, 193UL, 389UL, 769UL, 1543UL, 3079UL, 6151UL, 12289UL, 24593UL,
+        49157UL, 98317UL, 196613UL, 393241UL, 786433UL, 1572869UL, 3145739UL,
+        6291469UL, 12582917UL, 25165843UL, 50331653UL, 100663319UL, 201326611UL,
+        402653189UL, 805306457UL, 1610612741UL, 3221225473UL, 4294967291UL
+    };
+    for (size_t p : primes) {
+        if (p >= n) return p;
+    }
+    return n | 1;
+}
+
+}
+

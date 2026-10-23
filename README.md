@@ -1,15 +1,25 @@
-# Animated Mojang (Android ARM64)
+# Animated Mojang (Android ARM64 Standalone Edition)
 
 [![Platform](https://img.shields.io/badge/Platform-Android%20ARM64-green.svg)](https://github.com/spygamingog)
-[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.52.3%20%7C%20v1.26.45.1-blue.svg)](https://minecraft.net)
-[![Mod Loader](https://img.shields.io/badge/Loader-LeviLaunchroid%20%2F%20LeviLamina-orange.svg)](https://github.com/LiteLDev/LeviLamina)
-[![Version](https://img.shields.io/badge/Version-1.0.8--mc26.52-purple.svg)](https://github.com/spygamingog)
-[![README 简体中文](https://img.shields.io/badge/README-%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md)
+[![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.44.3--v1.26.52.3-blue.svg)](https://minecraft.net)
+[![Architecture](https://img.shields.io/badge/Architecture-Standalone%20Native%20C%2B%2B-orange.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
+[![Version](https://img.shields.io/badge/Version-1.0.0-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 
-An enterprise-grade native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)** running on **LeviLaunchroid** (LeviLamina Android).
+A high-performance standalone native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)**.
 
-Ported and maintained by **[SpyGamingOG](https://github.com/spygamingog)**.  
-Inspired by [chara2015/animated_mojang](https://github.com/chara2015/animated_mojang) (Java Edition) and the Windows x64 LeviLamina port [MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang).
+> [!NOTE]
+> ### 🚀 100% Standalone Architecture (Zero RP & Zero External Loader Dependency)
+> **Animated Mojang v1.0.0 is completely standalone.**
+> - **Zero Resource Pack (RP) Requirement**: No `.mcpack` or resource pack installation is needed. All vanilla panorama and Ancient City cubemap suppressions are handled directly through native engine function hooks (`PanoramaRenderer::$render`, `CubemapBackgroundScreen::$render`).
+> - **Zero Loader Dependency**: No companion mod loaders or external helper libraries (like LeviLamroid) are required. The mod directly hooks native Bedrock engine functions via internal AArch64 detours and GOT relocation.
+
+---
+
+## Authors & Attribution
+
+- **Original Windows x64 Mod**: Authored by **[MRUIAW](https://github.com/MRUIAW)** ([MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)), licensed under LGPL-3.0.
+- **Original Java Edition Mod**: Concept, 3D cave structure, and title assets by **[chara2015](https://github.com/chara2015)** ([chara2015/animated_mojang](https://github.com/chara2015/animated_mojang)), licensed under CC0 1.0.
+- **Android ARM64 Standalone Port**: Reverse-engineered, ported, and maintained by **[SpyGamingOG](https://github.com/spygamingog)**.
 
 ---
 
@@ -17,7 +27,7 @@ Inspired by [chara2015/animated_mojang](https://github.com/chara2015/animated_mo
 
 ![Animated Mojang Main Menu Showcase](icon.png)
 
-*Real-time 60 FPS 3D cave background rendered directly via OpenGL ES 3.0, paired with the hardware-accelerated 69-frame animated Minecraft title and instant sub-menu camera navigation.*
+*Real-time 60 FPS 3D cave background rendered directly via OpenGL ES 3.0, paired with hardware-accelerated animated Minecraft title sequence and seamless sub-menu camera transitions.*
 
 ---
 
@@ -25,60 +35,67 @@ Inspired by [chara2015/animated_mojang](https://github.com/chara2015/animated_mo
 
 | Component | Supported Version |
 |---|---|
-| **Minecraft Bedrock** | `1.26.52.3`, `1.26.45.1`, and compatible 1.26.x releases |
+| **Minecraft Bedrock** | `1.26.44.3`, `1.26.45.1`, `1.26.51.1`, `1.26.52.3`, and compatible 1.26.x releases |
 | **Platform** | Android ARM64 (`aarch64-linux-android`) |
-| **Mod Loader** | LeviLaunchroid (LeviLamina Android client) |
-| **Port Maintainer** | [SpyGamingOG](https://github.com/spygamingog) |
-| **Release Version** | `1.0.8-mc26.52` |
+| **Dependencies** | **None** (100% Standalone native C++) |
+| **Resource Pack** | **None** (Direct functional suppression, no RP needed) |
+| **Loaders Supported** | LeviLauncher (LeviLaunchroid), PreLoader, Zygisk, or direct native injection |
+| **Version** | `1.0.0` |
 
 ---
 
 ## Key Features
 
-1. **Real-Time 60 FPS 3D Cave GPU Engine (`CaveGlesRenderer`)**:
-   - Renders the authentic `normal_cave.mesh` (98,094 vertices) directly on the game's GPU render thread by hooking `glClear` via GOT relocation (`0x132893d8`).
-   - Features baked colored lighting, animated scrolling lava, wall-mounted soul torches, and flame/smoke particle effects.
-   - Smooth cubic-bezier spline opening flight with subtle ambient idle camera swaying.
+1. **Embedded Real-Time 60 FPS 3D Cave GPU Engine (`CaveGlesRenderer`)**:
+   - Injects into the game's GPU render thread via Global Offset Table (GOT) relocation on `glClear` (RVA `0x132893d8`).
+   - Renders authentic `normal_cave.mesh` (98,094 vertices) with baked colored lighting, animated lava UV scrolling, wall-mounted soul torches, and flame/smoke particles at steady 60 FPS.
+   - Comprehensive state backup and restoration: preserves VAO, VBO, program, texture bindings, depth mask, depth test, cull face, and blend functions before yielding control back to Minecraft.
 
-2. **Full-Width Hardware-Accelerated 69-Frame Minecraft Title**:
-   - 69-frame Aseprite animated flipbook (`animated_title.png` + `animated_title.json`) rendered via Bedrock's native JSON UI engine.
-   - **Zero-Push Layout Architecture**: Parent panel `title_panel_pocket` remains at exact vanilla size `[ "55%", "18.85%x" ]`, ensuring that menu buttons remain perfectly centered. Child `title_image` scales to `[ "171.8%", "156.7%" ]` with `-30%` vertical offset, displaying the logo at 100% full vanilla size right above the Play button with exploding debris floating upward into the top margin.
+2. **Direct Functional Background Suppression (Zero Resource Pack)**:
+   - Eliminates the requirement for transparent panorama resource packs (`AnimatedMojang_RP`).
+   - Hooks RenderDragon's native background renderers (`PanoramaRenderer::$render` at `0x0967FA98`, `CubemapBackgroundScreen::$render` at `0x09B7C9E0`) to suppress the vanilla Ancient City cubemap directly in memory.
+   - **Zero In-World Interference**: Tracks game state (`isMainMenuActive()`) across `InGamePlayScreen::render` and `ClientInstance::requestLeaveGame`, ensuring the cave only renders when idling on the main menus and never inside gameplay, preserving 100% vanilla sky and dimensions.
 
-3. **Instant, Lag-Free Sub-Menu Camera Navigation**:
-   - Distinct, cinematic camera perspectives tailored for every menu screen:
+3. **Standalone Hardware-Accelerated Title Animation**:
+   - Renders the 2D title animation sequence directly on the GPU render thread without requiring JSON UI modifications or external resource pack packs.
+   - Hooks `ui::ScreenTechStackSelector::getTechStackForScreen` (RVA `0x0974E844`) to enforce JSON UI for seamless menu presentation.
+
+4. **Instant Sub-Menu Camera Navigation**:
+   - Distinct, cinematic camera perspectives tailored for every menu screen with zero sideways roll tilt:
      - **Main Start Screen**: `(31.0, 13.0, 6.0, yaw=21.0, pitch=-13.0)`
-     - **Worlds / Play Screen**: `(28.0, 12.0, 14.0, yaw=15.0, pitch=-8.0)`
-     - **Settings Screen**: `(24.0, 14.0, 25.0, yaw=30.0, pitch=-5.0)`
-     - **Realms Screen**: `(33.0, 11.0, 10.0, yaw=10.0, pitch=-15.0)`
-     - **Marketplace Screen**: `(20.0, 15.0, 35.0, yaw=45.0, pitch=-2.0)`
-     - **Dressing Room / Profile Screen**: `(35.0, 12.0, 5.0, yaw=5.0, pitch=-20.0)`
-   - Direct button-click interception (`0x0A31344C`, `0x0A3171AC`, `0x0A3174DC`, `0x0A31815C`, `0x0A3187A4`) and exit hook (`0x0A567540`) eliminate camera stutter and transition lag.
-
-4. **Transparent Cubemap Optical Pass-Through (`AnimatedMojang_RP.mcpack`)**:
-   - Overrides RenderDragon's default cubemap panorama textures with transparent assets, allowing the 3D OpenGL ES cave to shine through cleanly without RenderDragon skybox occlusion.
+     - **Worlds / Play Screen**: `(24.0, 15.0, 18.0, yaw=-24.0, pitch=-6.0)`
+     - **Settings Screen**: `(26.0, 14.0, 20.0, yaw=-10.0, pitch=-8.0)`
+     - **Realms Screen**: `(22.0, 14.0, 24.0, yaw=15.0, pitch=-5.0)`
+     - **Marketplace Screen**: `(18.0, 13.0, 18.0, yaw=79.0, pitch=4.0)`
+     - **Dressing Room Screen**: `(20.0, 13.0, 37.0, yaw=42.0, pitch=-4.0)`
+   - Hooked directly to engine button handlers (Play, Settings, Realms, Dressing Room, Marketplace, Menu Exit) for zero-lag camera glides.
 
 ---
 
 ## Installation
 
-### Method 1: LeviLauncher One-Click Install (Recommended)
-1. Download **`AnimatedMojang_Suite_Android.zip`** from the [latest release](https://github.com/spygamingog/Animated-Mojang-Android/releases).
-2. Extract the archive.
-3. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select **`animated_mojang.levipack`**.
-4. Tap **`AnimatedMojang_RP.mcpack`** in your file manager to import the resource pack into Minecraft (or copy `AnimatedMojang_RP` to your `resource_packs` folder).
-5. Activate **Animated Mojang Resources** in **Settings** -> **Global Resources**.
-6. Launch Minecraft through LeviLauncher!
+### Method 1: LeviLauncher (LeviLaunchroid)
+1. Get **`animated_mojang.levipack`** or **`AnimatedMojang-1.0.0-android-arm64.zip`**.
+2. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select **`animated_mojang.levipack`** (or extract to `.../minecraft/<profile>/mods/AnimatedMojang/`).
+3. Ensure AnimatedMojang is enabled.
+4. Launch Minecraft. That's it! (No resource pack required).
 
-### Method 2: Manual Installation
-1. Extract `AnimatedMojang` folder into:
+### Method 2: Manual / Direct Installation
+1. Extract `AnimatedMojang-1.0.0-android-arm64.zip` into your mods folder:
    ```
-   /sdcard/Android/media/org.levimc.launcher/minecraft/<profile>/mods/AnimatedMojang/
+   mods/AnimatedMojang/
+   ├── libAnimatedMojang.so
+   ├── manifest.json
+   ├── icon.png
+   ├── config/
+   │   └── config.json
+   └── resources/
+       ├── data/
+       │   └── normal_cave.mesh
+       └── textures/
+           └── animated_mojang/
    ```
-2. Extract `AnimatedMojang_RP` folder into:
-   ```
-   /sdcard/Android/media/org.levimc.launcher/minecraft/<profile>/external/games/com.mojang/resource_packs/AnimatedMojang_RP/
-   ```
-3. In `mods_config.json`, ensure `AnimatedMojang` is set to `"enabled": true`.
+2. Launch Minecraft using your preferred native loader.
 
 ---
 
@@ -89,35 +106,33 @@ Edit `mods/AnimatedMojang/config/config.json`:
 | Option | Default | Description |
 |---|---|---|
 | `enabled` | `true` | Enable or disable the mod |
-| `preferJsonMainMenu` | `true` | Use JSON UI flipbook for title rendering |
-| `minecraftTitleAnimation` | `true` | Play the 69-frame title animation sequence |
+| `preferJsonMainMenu` | `true` | Use JSON UI start menu mode |
+| `minecraftTitleAnimation` | `true` | Play the animated Minecraft title sequence |
 | `caveBackground` | `true` | Render the real-time 3D OpenGL ES cave background |
-| `restyleLoadingProgress` | `true` | Recolor loading progress bars to Crimson theme |
-| `replayOnReturnToMenu` | `false` | Replay the intro flight upon returning to main menu |
-| `blockMenuInputDuringIntro` | `true` | Prevent accidental button clicks during the intro flight |
-| `maxPresentationSeconds` | `15` | Intro timeout safeguard (5–60 seconds) |
+| `restyleLoadingProgress` | `true` | Restyle progress bar to Crimson theme |
+| `replayOnReturnToMenu` | `true` | Replay the intro cinematic when returning from gameplay |
+| `maxPresentationSeconds` | `15.0` | Maximum opening flight duration |
 
 ---
 
 ## Building from Source
 
 ### Prerequisites
-- Android NDK r25+ / Clang 17+
+- Clang compiler for AArch64 (Android NDK r25+ or Termux clang++)
 - CMake 3.22+
-- Python 3.10+
 
-### Build & Package Command
+### Build Steps
 ```bash
-bash package_mod.sh
+# Build native standalone shared library and package:
+./package_mod.sh
 ```
-
-The script builds `libAnimatedMojang.so`, creates `AnimatedMojang_RP.mcpack`, packages `animated_mojang.levipack`, and generates the all-in-one suite zip `AnimatedMojang_Suite_Android.zip` in `dist/`.
+Outputs are generated in `dist/`:
+- `dist/AnimatedMojang-1.0.0-android-arm64.zip`
+- `dist/animated_mojang.levipack`
 
 ---
 
-## Credits & Attribution
+## License
 
-- **Android ARM64 Port & Enhancements**: [SpyGamingOG](https://github.com/spygamingog)
-- **Windows x64 LeviLamina Upstream**: [MRUIAW](https://github.com/MRUIAW/Animated-Mojang)
-- **Original Java Edition Mod**: [chara2015](https://github.com/chara2015/animated_mojang)
-- **Minecraft**: All game assets and trademarks belong to Mojang AB / Microsoft.
+- Source code licensed under **LGPL-3.0** (inherited from [MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)).
+- 3D cave model and animation assets by **chara2015** under **CC0 1.0 Universal**.

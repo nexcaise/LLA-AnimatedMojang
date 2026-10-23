@@ -249,19 +249,6 @@ bool NativeScene::draw(ScreenContext& ctx, float width, float height, double tim
     ScreenRenderer::singleton().fill(ctx, 0, 0, width, height,
         mce::Color{static_cast<int>(7 + 23 * loading), static_cast<int>(8 + 22 * loading), static_cast<int>(13 + 18 * loading)});
 
-    // Mesh Helpers submission into Bedrock RenderDragon UI Render Graph
-    using RenderMeshImmediatelyFn = void (*)(ScreenContext&, void*, void*, void*, void*);
-    static auto sRenderMeshImmediately = reinterpret_cast<RenderMeshImmediatelyFn>(
-        ll::memory::getMinecraftBase() + 0x0B2BE65C
-    );
-
-    if (sRenderMeshImmediately && state->tessellator) {
-        for (auto const& batch : state->batches) {
-            (void)batch;
-            sRenderMeshImmediately(ctx, state->tessellator.get(), nullptr, nullptr, nullptr);
-        }
-    }
-
     return true;
 }
 

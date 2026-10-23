@@ -17,15 +17,16 @@ namespace mce {
 class TextureGroup {
 public:
     virtual ~TextureGroup() = default;
-    virtual TexturePtr getTexture(const ResourceLocation& loc, bool fallback = false);
-    virtual TexturePtr getTexture(
-        const ResourceLocation& loc,
-        bool fallback,
-        std::optional<int> type,
-        cg::TextureSetLayerType layer = cg::TextureSetLayerType::Color
-    );
-    virtual void unloadTexture(const ResourceLocation& loc);
+
+    virtual void loadTexturesAsync(std::span<ResourceLocation> /*locs*/, std::optional<int> = std::nullopt) {}
+
+    virtual TexturePtr getTexture(const ResourceLocation& /*loc*/, bool /*fallback*/,
+                                  std::optional<int> = std::nullopt,
+                                  cg::TextureSetLayerType = cg::TextureSetLayerType::Color) {
+        TexturePtr ptr;
+        ptr.mClientTexture = std::make_shared<BedrockTextureData>();
+        return ptr;
+    }
 };
 
 } // namespace mce
-
