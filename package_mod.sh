@@ -4,7 +4,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
 DIST_DIR="${SCRIPT_DIR}/dist/AnimatedMojang"
-ARCHIVE_ZIP="${SCRIPT_DIR}/dist/AnimatedMojang-1.0.0-android-arm64.zip"
 LEVIPACK_OUT="${SCRIPT_DIR}/dist/animated_mojang.levipack"
 
 export MALLOC_TAGGING_LEVEL=0
@@ -17,7 +16,7 @@ if [ ! -x "${CXX_BIN}" ]; then
     CXX_BIN="aarch64-linux-gnu-g++"
 fi
 
-echo "=== 1. Building Animated Mojang Standalone v1.0.0 for Android ARM64 using ${CXX_BIN} ==="
+echo "=== 1. Building Animated Mojang v1.0.0 for Android ARM64 using ${CXX_BIN} ==="
 rm -rf "${BUILD_DIR}"
 cmake -B "${BUILD_DIR}" -S "${SCRIPT_DIR}" -DCMAKE_CXX_COMPILER="${CXX_BIN}"
 cmake --build "${BUILD_DIR}" --config Release -- -j1
@@ -27,7 +26,7 @@ if command -v nm >/dev/null 2>&1; then
     nm -D "${BUILD_DIR}/libAnimatedMojang.so" | grep -E "(PLGetModRegistration|_ZNSt6__ndk113__hash_memory|_ZNSt6__ndk112__next_prime)"
 fi
 
-echo "=== 3. Packaging Standalone Distribution (Zero RP, Zero Lamroid Dependency) ==="
+echo "=== 3. Packaging Native LeviPack Distribution (Zero RP, Direct Native Hooks) ==="
 rm -rf "${SCRIPT_DIR}/dist"
 mkdir -p "${DIST_DIR}"
 
@@ -38,19 +37,6 @@ cp -rf "${SCRIPT_DIR}/config" "${DIST_DIR}/"
 mkdir -p "${DIST_DIR}/resources"
 cp -rf "${SCRIPT_DIR}/resources/data" "${DIST_DIR}/resources/"
 cp -rf "${SCRIPT_DIR}/resources/textures" "${DIST_DIR}/resources/"
-
-# Build Standalone Zip
-(
-    cd "${SCRIPT_DIR}/dist"
-    python3 -c "
-import zipfile, os
-with zipfile.ZipFile('${ARCHIVE_ZIP}', 'w', zipfile.ZIP_DEFLATED) as zf:
-    for root, dirs, files in os.walk('AnimatedMojang'):
-        for file in files:
-            p = os.path.join(root, file)
-            zf.write(p, p)
-"
-)
 
 # Build Native .levipack
 (
@@ -66,11 +52,9 @@ with zipfile.ZipFile('${LEVIPACK_OUT}', 'w', zipfile.ZIP_DEFLATED) as zf:
 "
 )
 
-# Copy Archive and levipack to Download and MG
+# Copy levipack to Download and MG
 cp -f "${LEVIPACK_OUT}" "/sdcard/MG/animated_mojang.levipack" 2>/dev/null || true
 cp -f "${LEVIPACK_OUT}" "/sdcard/Download/animated_mojang.levipack" 2>/dev/null || true
-cp -f "${ARCHIVE_ZIP}" "/sdcard/MG/AnimatedMojang-1.0.0-android-arm64.zip" 2>/dev/null || true
-cp -f "${ARCHIVE_ZIP}" "/sdcard/Download/AnimatedMojang-1.0.0-android-arm64.zip" 2>/dev/null || true
 
 # Auto-deploy to all active launcher profiles
 for profile_dir in /sdcard/Android/media/org.levimc.launcher/minecraft/*/mods; do
@@ -129,7 +113,6 @@ for p in targets:
             f.writelines(new_lines)
 " 2>/dev/null || true
 
-echo "=== Created standalone packages ==="
-echo "Zip: ${ARCHIVE_ZIP}"
+echo "=== Created LeviPack package ==="
 echo "LeviPack: ${LEVIPACK_OUT}"
-echo "=== Successfully built and packaged Animated Mojang Standalone v1.0.0 (Zero RP, Zero Lamroid Dependency) ==="
+echo "=== Successfully built and packaged Animated Mojang v1.0.0 (Zero RP, Direct Native Hooks) ==="

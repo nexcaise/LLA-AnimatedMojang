@@ -1,13 +1,13 @@
 # Changelog
 
-All notable changes to the standalone Android ARM64 port of **Animated Mojang** are documented here.
+All notable changes to the Android ARM64 port of **Animated Mojang** are documented here.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and release versions follow [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] - 2026-10-23
 
-### Complete Standalone Re-Architecture
-- **Pure Standalone Native C++**: Purged all external loader and companion dependencies (including LeviLamroid `liblevilamroid.so`). The mod now operates with 100% independence, containing its own built-in AArch64 inline detours, GOT relocation hooker, and game lifecycle state engine.
+### Direct Native C++ Re-Architecture
+- **Native C++ Engine Integration**: Direct engine integration without companion loader dependencies. The mod contains its own built-in AArch64 inline detours, GOT relocation hooker, and game lifecycle state engine.
 - **Purged Resource Pack (RP) Requirement**: Removed all requirements for `AnimatedMojang_RP` resource packs and eliminated all `global_resource_packs.json` file writes.
 - **Direct Engine Functional Background Suppression**:
   - Directly hooks `PanoramaRenderer::$render` (RVA `0x0967FA98`) and `CubemapBackgroundScreen::$render` (RVA `0x09B7C9E0`) to suppress the vanilla Ancient City cubemap cleanly in main menus without requiring optical pass-through transparent PNGs.
@@ -19,5 +19,5 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   - Direct 2D title animation sequence rendered on the GPU render thread without requiring JSON UI modifications.
 - **Instant Sub-Menu Camera Navigation**:
   - Tailored zero-roll camera vistas for Play/Worlds, Settings, Realms, Dressing Room, Marketplace, and Main Start screens.
-- **Unified Packaging**:
-  - Generates standalone `AnimatedMojang-1.0.0-android-arm64.zip` and `animated_mojang.levipack`.
+- **LeviPack Packaging**:
+  - Generates `animated_mojang.levipack` for one-tap import in LeviLauncher.

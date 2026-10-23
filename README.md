@@ -1,17 +1,18 @@
-# Animated Mojang (Android ARM64 Standalone Edition)
+# Animated Mojang (Android ARM64)
 
 [![Platform](https://img.shields.io/badge/Platform-Android%20ARM64-green.svg)](https://github.com/spygamingog)
 [![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.44.3--v1.26.52.3-blue.svg)](https://minecraft.net)
-[![Architecture](https://img.shields.io/badge/Architecture-Standalone%20Native%20C%2B%2B-orange.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
+[![Architecture](https://img.shields.io/badge/Architecture-Native%20C%2B%2B-orange.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
+[![Package](https://img.shields.io/badge/Package-animated__mojang.levipack-blueviolet.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 [![Version](https://img.shields.io/badge/Version-1.0.0-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 
-A high-performance standalone native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)**.
+A high-performance native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)**.
 
 > [!NOTE]
-> ### 🚀 100% Standalone Architecture (Zero RP & Zero External Loader Dependency)
-> **Animated Mojang v1.0.0 is completely standalone.**
+> ### 🚀 Direct Native Architecture (Zero RP & Zero External Loader Dependency)
+> **Animated Mojang v1.0.0 features direct engine integration:**
 > - **Zero Resource Pack (RP) Requirement**: No `.mcpack` or resource pack installation is needed. All vanilla panorama and Ancient City cubemap suppressions are handled directly through native engine function hooks (`PanoramaRenderer::$render`, `CubemapBackgroundScreen::$render`).
-> - **Zero Loader Dependency**: No companion mod loaders or external helper libraries (like LeviLamroid) are required. The mod directly hooks native Bedrock engine functions via internal AArch64 detours and GOT relocation.
+> - **Zero Companion Loader Dependency**: No companion mod loaders or external helper libraries (like LeviLamroid) are required. The mod directly hooks native Bedrock engine functions via internal AArch64 detours and GOT relocation.
 
 ---
 
@@ -19,7 +20,7 @@ A high-performance standalone native C++ client mod for **Minecraft Bedrock Edit
 
 - **Original Windows x64 Mod**: Authored by **[MRUIAW](https://github.com/MRUIAW)** ([MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)), licensed under LGPL-3.0.
 - **Original Java Edition Mod**: Concept, 3D cave structure, and title assets by **[chara2015](https://github.com/chara2015)** ([chara2015/animated_mojang](https://github.com/chara2015/animated_mojang)), licensed under CC0 1.0.
-- **Android ARM64 Standalone Port**: Reverse-engineered, ported, and maintained by **[SpyGamingOG](https://github.com/spygamingog)**.
+- **Android ARM64 Port**: Reverse-engineered, ported, and maintained by **[SpyGamingOG](https://github.com/spygamingog)**.
 
 ---
 
@@ -37,9 +38,10 @@ A high-performance standalone native C++ client mod for **Minecraft Bedrock Edit
 |---|---|
 | **Minecraft Bedrock** | `1.26.44.3`, `1.26.45.1`, `1.26.51.1`, `1.26.52.3`, and compatible 1.26.x releases |
 | **Platform** | Android ARM64 (`aarch64-linux-android`) |
-| **Dependencies** | **None** (100% Standalone native C++) |
+| **Dependencies** | **None** (Native C++) |
 | **Resource Pack** | **None** (Direct functional suppression, no RP needed) |
 | **Loaders Supported** | LeviLauncher (LeviLaunchroid), PreLoader, Zygisk, or direct native injection |
+| **Package Format** | `.levipack` (`animated_mojang.levipack`) |
 | **Version** | `1.0.0` |
 
 ---
@@ -56,8 +58,8 @@ A high-performance standalone native C++ client mod for **Minecraft Bedrock Edit
    - Hooks RenderDragon's native background renderers (`PanoramaRenderer::$render` at `0x0967FA98`, `CubemapBackgroundScreen::$render` at `0x09B7C9E0`) to suppress the vanilla Ancient City cubemap directly in memory.
    - **Zero In-World Interference**: Tracks game state (`isMainMenuActive()`) across `InGamePlayScreen::render` and `ClientInstance::requestLeaveGame`, ensuring the cave only renders when idling on the main menus and never inside gameplay, preserving 100% vanilla sky and dimensions.
 
-3. **Standalone Hardware-Accelerated Title Animation**:
-   - Renders the 2D title animation sequence directly on the GPU render thread without requiring JSON UI modifications or external resource pack packs.
+3. **Hardware-Accelerated Title Animation**:
+   - Renders the 2D title animation sequence directly on the GPU render thread without requiring JSON UI modifications or external resource packs.
    - Hooks `ui::ScreenTechStackSelector::getTechStackForScreen` (RVA `0x0974E844`) to enforce JSON UI for seamless menu presentation.
 
 4. **Instant Sub-Menu Camera Navigation**:
@@ -74,28 +76,11 @@ A high-performance standalone native C++ client mod for **Minecraft Bedrock Edit
 
 ## Installation
 
-### Method 1: LeviLauncher (LeviLaunchroid)
-1. Get **`animated_mojang.levipack`** or **`AnimatedMojang-1.0.0-android-arm64.zip`**.
-2. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select **`animated_mojang.levipack`** (or extract to `.../minecraft/<profile>/mods/AnimatedMojang/`).
+### LeviLauncher (LeviLaunchroid)
+1. Get **`animated_mojang.levipack`**.
+2. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select **`animated_mojang.levipack`**.
 3. Ensure AnimatedMojang is enabled.
-4. Launch Minecraft. That's it! (No resource pack required).
-
-### Method 2: Manual / Direct Installation
-1. Extract `AnimatedMojang-1.0.0-android-arm64.zip` into your mods folder:
-   ```
-   mods/AnimatedMojang/
-   ├── libAnimatedMojang.so
-   ├── manifest.json
-   ├── icon.png
-   ├── config/
-   │   └── config.json
-   └── resources/
-       ├── data/
-       │   └── normal_cave.mesh
-       └── textures/
-           └── animated_mojang/
-   ```
-2. Launch Minecraft using your preferred native loader.
+4. Launch Minecraft. That's it! (Zero resource pack required).
 
 ---
 
@@ -123,11 +108,10 @@ Edit `mods/AnimatedMojang/config/config.json`:
 
 ### Build Steps
 ```bash
-# Build native standalone shared library and package:
+# Build native shared library and generate .levipack:
 ./package_mod.sh
 ```
-Outputs are generated in `dist/`:
-- `dist/AnimatedMojang-1.0.0-android-arm64.zip`
+The output package is generated at:
 - `dist/animated_mojang.levipack`
 
 ---

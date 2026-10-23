@@ -1,33 +1,26 @@
-# Animated Mojang Standalone Edition (Setup & Architecture Guide)
+# Animated Mojang (Setup & Architecture Guide)
 
 ## Overview
-This package contains the complete, hardware-accelerated **Animated Mojang Standalone Edition** for **Minecraft Bedrock Edition (Android ARM64)**.
+This package contains the complete, hardware-accelerated **Animated Mojang** mod for **Minecraft Bedrock Edition (Android ARM64)**.
 
 It requires **zero resource packs** and **zero companion mod loaders**.
 
 ---
 
 ## What's Included
-1. **`animated_mojang.levipack`** (2.5 MB):
-   - Native C++ shared library (`libAnimatedMojang.so`) compiled for Android ARM64 (ELF64).
-   - 3D Cave mesh (`normal_cave.mesh`), textures, shaders, and configuration.
-   - Self-contained manifest for LeviLauncher.
-2. **`AnimatedMojang-1.0.0-android-arm64.zip`** (2.5 MB):
-   - Raw loose folder format ready to extract into `mods/AnimatedMojang/`.
+- **`animated_mojang.levipack`**:
+  - Native C++ shared library (`libAnimatedMojang.so`) compiled for Android ARM64 (ELF64).
+  - 3D Cave mesh (`normal_cave.mesh`), textures, shaders, and configuration.
+  - Self-contained manifest for LeviLauncher.
 
 ---
 
 ## Installation
 
-### Method A: LeviLauncher (LeviLaunchroid)
+### LeviLauncher (LeviLaunchroid)
 1. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select `animated_mojang.levipack`.
 2. Ensure the mod toggle is **Enabled**.
 3. Launch Minecraft.
-
-### Method B: Manual Extraction
-1. Extract `AnimatedMojang-1.0.0-android-arm64.zip` into:
-   `/sdcard/Android/media/org.levimc.launcher/minecraft/<profile>/mods/AnimatedMojang/`
-2. Launch Minecraft.
 
 ---
 

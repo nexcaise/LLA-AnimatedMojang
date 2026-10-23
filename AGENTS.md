@@ -1,4 +1,4 @@
-# AGENTS.md — Technical Architecture & Modding Guide for Animated Mojang (Android ARM64 Standalone)
+# AGENTS.md — Technical Architecture & Modding Guide for Animated Mojang (Android ARM64)
 
 > **Audience**: AI Coding Agents (Antigravity, Claude Code, Codex, Cursor, Copilot) and Native C++ Reverse Engineers working on Minecraft Bedrock Edition (Android ARM64).
 > **Port Maintainer**: **SpyGamingOG** (`spygamingog`).
@@ -7,9 +7,9 @@
 
 ## 1. System Overview
 
-`AnimatedMojang` is a high-performance native C++ standalone client mod for **Minecraft Bedrock Edition (Android ARM64)**. It ports the iconic PC mod by MRUIAW / chara2015 directly to mobile devices with 60 FPS performance, seamless sub-menu camera transitions, and an animated Minecraft title without UI distortion.
+`AnimatedMojang` is a high-performance native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)**. It ports the iconic PC mod by MRUIAW / chara2015 directly to mobile devices with 60 FPS performance, seamless sub-menu camera transitions, and an animated Minecraft title without UI distortion.
 
-### Core Standalone Architecture
+### Core Architecture
 1. **Embedded OpenGL ES 3.0 3D Cave Pipeline (`CaveGlesRenderer.cpp`)**:
    - Injects into the game's GPU render thread via Global Offset Table (GOT) relocation on `glClear` (RVA `0x132893d8`).
    - Renders the authentic `normal_cave.mesh` (98,094 vertices) with baked colored lighting, animated lava UV scrolling, wall-mounted soul torches, and flame/smoke particles at steady 60 FPS.

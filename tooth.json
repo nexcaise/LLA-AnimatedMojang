@@ -4,13 +4,12 @@
   "tooth": "github.com/spygamingog/Animated-Mojang-Android",
   "version": "1.0.0",
   "info": {
-    "name": "Animated Mojang Standalone (Android ARM64)",
-    "description": "Standalone Animated Minecraft title, 60 FPS real-time 3D cave background, and cinematic camera transitions for Minecraft Bedrock on Android ARM64. Zero RP and zero external loader dependencies.",
+    "name": "Animated Mojang (Android ARM64)",
+    "description": "Animated Minecraft title, 60 FPS real-time 3D cave background, and cinematic camera transitions for Minecraft Bedrock on Android ARM64. Zero RP and direct native function hooks.",
     "tags": [
       "platform:android-arm64",
       "type:mod",
-      "platform:client",
-      "platform:standalone"
+      "platform:client"
     ],
     "avatar_url": "https://github.com/spygamingog.png"
   },
@@ -21,9 +20,9 @@
       "dependencies": {},
       "assets": [
         {
-          "type": "zip",
+          "type": "levipack",
           "urls": [
-            "https://{{tooth}}/releases/download/v{{version}}/AnimatedMojang-1.0.0-android-arm64.zip"
+            "https://{{tooth}}/releases/download/v{{version}}/animated_mojang.levipack"
           ],
           "placements": [
             {

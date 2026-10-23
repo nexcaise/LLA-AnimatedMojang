@@ -67,7 +67,7 @@ std::atomic_bool active = false;
 std::atomic_bool skipRequested = false;
 std::atomic_bool skipAllowed = false;
 
-// Standalone in-menu / in-world lifecycle state tracking (zero external loader dependencies)
+// In-menu / in-world lifecycle state tracking (zero external loader dependencies)
 std::atomic_bool sIsMainMenu = true;
 std::atomic_bool sIsInWorld = false;
 std::atomic_bool sIsLoading = false;
@@ -109,7 +109,7 @@ void updatePresentation(double time, bool foregroundMenu, bool ready) {
 }
 
 // ----------------------------------------------------------------------------
-// Reverse-Engineered Standalone Hooks (Verified 1.26.52.3 Android ARM64)
+// Reverse-Engineered Native Hooks (Verified 1.26.52.3 Android ARM64)
 // ----------------------------------------------------------------------------
 
 // 1. ui::ScreenTechStackSelector::getTechStackForScreen (RVA 0x0974E844)
@@ -450,7 +450,7 @@ void start(Config const& config, std::filesystem::path const& modDirectory) {
     sIsInWorld.store(false);
     sIsLoading.store(false);
 
-    logger().info("Installing Animated Mojang Standalone v1.0.0 hooks (zero RP, zero Lamroid dependency)...");
+    logger().info("Installing Animated Mojang v1.0.0 hooks (zero RP, zero Lamroid dependency)...");
 
     // Hook 1: Force JSON UI for start menu screens (RVA 0x0974E844)
     ll::memory::hookRva(0x0974E844,
@@ -524,7 +524,7 @@ void start(Config const& config, std::filesystem::path const& modDirectory) {
         logger().info("Hooked glClear via GOT relocation at RVA 0x", std::hex, GL_CLEAR_GOT_RVA);
     }
 
-    logger().info("Animated Mojang Standalone v1.0.0 hooks installed successfully!");
+    logger().info("Animated Mojang v1.0.0 hooks installed successfully!");
 }
 
 void stop() {
