@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(AnimatedMojang VERSION 1.0.2 LANGUAGES CXX)
+project(AnimatedMojang VERSION 1.0.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -25,14 +25,9 @@ link_directories(
     /data/data/com.termux/files/usr/lib
 )
 
-set(SOURCES
-    src/mod/MyMod.cpp
-    src/client/Client.cpp
-    src/scene/CaveGlesRenderer.cpp
-    src/scene/ImageDecode.cpp
-    src/runtime/Hook.cpp
-    src/runtime/Logger.cpp
-    src/runtime/EventBus.cpp
+file(GLOB_RECURSE SOURCES
+    "${CMAKE_SOURCE_DIR}/src/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/*.c"
 )
 
 add_library(AnimatedMojang SHARED ${SOURCES})
