@@ -60,27 +60,43 @@ static bool inlineHookAArch64(void* target, void* detour, void** original) {
     uintptr_t pageEnd = (targetAddr + 16 + pageSize - 1) & ~(pageSize - 1);
     size_t totalLen = pageEnd - pageStart;
 
+    // 1. Ensure target page is writable (try RWX, fallback to RW for W^X kernels)
+    bool wXRestorationNeeded = false;
     if (mprotect(reinterpret_cast<void*>(pageStart), totalLen, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
-        return false;
+        if (mprotect(reinterpret_cast<void*>(pageStart), totalLen, PROT_READ | PROT_WRITE) != 0) {
+            return false;
+        }
+        wXRestorationNeeded = true;
     }
 
-    // Allocate 32-byte trampoline for original function bytes
-    static uint8_t sTrampolinePool[4096] __attribute__((aligned(4096)));
+    // 2. Allocate 32-byte trampoline for original function bytes
+    static uint8_t* sTrampolinePool = nullptr;
     static size_t sPoolOffset = 0;
+    static constexpr size_t kPoolSize = 4096;
 
-    if (sPoolOffset + 32 > sizeof(sTrampolinePool)) {
+    if (!sTrampolinePool) {
+        void* mem = mmap(nullptr, kPoolSize, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (mem == MAP_FAILED) {
+            // Fallback to static buffer
+            static uint8_t sStaticPool[kPoolSize] __attribute__((aligned(4096)));
+            mprotect(sStaticPool, sizeof(sStaticPool), PROT_READ | PROT_WRITE | PROT_EXEC);
+            sTrampolinePool = sStaticPool;
+        } else {
+            sTrampolinePool = static_cast<uint8_t*>(mem);
+        }
+    }
+
+    if (sPoolOffset + 32 > kPoolSize) {
         return false;
     }
 
     uint8_t* trampoline = &sTrampolinePool[sPoolOffset];
     sPoolOffset += 32;
 
-    mprotect(sTrampolinePool, sizeof(sTrampolinePool), PROT_READ | PROT_WRITE | PROT_EXEC);
-
-    // Copy original 16 bytes
+    // 3. Copy original 16 bytes
     std::memcpy(trampoline, target, 16);
 
-    // Append jump back to target + 16 in trampoline
+    // 4. Append jump back to target + 16 in trampoline
     // LDR X16, #8; BR X16; <targetAddr + 16>
     uint32_t jumpBack[4] = {
         0x58000050, // ldr x16, #8
@@ -94,7 +110,7 @@ static bool inlineHookAArch64(void* target, void* detour, void** original) {
         *original = trampoline;
     }
 
-    // Write detour jump to target: LDR X16, #8; BR X16; <detourAddr>
+    // 5. Write detour jump to target: LDR X16, #8; BR X16; <detourAddr>
     uintptr_t detourAddr = reinterpret_cast<uintptr_t>(detour);
     uint32_t hookCode[4] = {
         0x58000050, // ldr x16, #8
@@ -103,6 +119,11 @@ static bool inlineHookAArch64(void* target, void* detour, void** original) {
         static_cast<uint32_t>(detourAddr >> 32)
     };
     std::memcpy(target, hookCode, 16);
+
+    // 6. Restore page to RX if kernel enforces W^X
+    if (wXRestorationNeeded) {
+        mprotect(reinterpret_cast<void*>(pageStart), totalLen, PROT_READ | PROT_EXEC);
+    }
 
     __builtin___clear_cache(reinterpret_cast<char*>(pageStart), reinterpret_cast<char*>(pageEnd));
     __builtin___clear_cache(reinterpret_cast<char*>(trampoline), reinterpret_cast<char*>(trampoline) + 32);

@@ -16,7 +16,7 @@ if [ ! -x "${CXX_BIN}" ]; then
     CXX_BIN="aarch64-linux-gnu-g++"
 fi
 
-echo "=== 1. Building Animated Mojang v1.0.0 for Android ARM64 using ${CXX_BIN} ==="
+echo "=== 1. Building Animated Mojang v1.0.1 for Android ARM64 using ${CXX_BIN} ==="
 rm -rf "${BUILD_DIR}"
 cmake -B "${BUILD_DIR}" -S "${SCRIPT_DIR}" -DCMAKE_CXX_COMPILER="${CXX_BIN}"
 cmake --build "${BUILD_DIR}" --config Release -- -j1
@@ -113,4 +113,4 @@ for f in glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/**/globa
 
 echo "=== Created LeviPack package ==="
 echo "LeviPack: ${LEVIPACK_OUT}"
-echo "=== Successfully built and packaged Animated Mojang v1.0.0 (Zero RP, Direct Native Hooks) ==="
+echo "=== Successfully built and packaged Animated Mojang v1.0.1 (Zero RP, Direct Native Hooks) ==="

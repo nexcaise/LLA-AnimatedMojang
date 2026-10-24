@@ -15,7 +15,7 @@ struct Config {
     bool                     blockMenuInputDuringIntro = true;
     bool                     debugScreens              = false;
     double                   maxPresentationSeconds    = 15.0;
-    std::vector<std::string> menuScreenNames           = {"start_screen", "/main-menu", "/pre-start", "main_menu_screen"};
+    std::vector<std::string> menuScreenNames           = {"start_screen", "/main-menu", "main_menu_screen"};
     std::vector<std::string> titleControlNames         = {"minecraft_title", "title_image", "logo"};
 };
 } // namespace animated_mojang

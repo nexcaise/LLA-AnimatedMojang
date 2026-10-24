@@ -34,19 +34,32 @@ bool MyMod::load() {
         }
     }
 
+    // Also check parent of library if loaded from a subfolder like lib/
+    if (dladdr(reinterpret_cast<void*>(&MyMod::getInstance), &dlinfo) && dlinfo.dli_fname) {
+        candidates.push_back(std::filesystem::path(dlinfo.dli_fname).parent_path().parent_path());
+    }
+
     candidates.push_back("/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/mods/AnimatedMojang");
+    candidates.push_back("/sdcard/Android/media/org.levimc.launcher/minecraft/_shared/mods/AnimatedMojang");
     candidates.push_back("/sdcard/MG/AnimatedMojang");
     candidates.push_back("/sdcard/Download/AnimatedMojang");
     candidates.push_back("/data/data/org.levimc.launcher/cache/native_mods/com.mojang.minecraftpe/mods/AnimatedMojang");
+    candidates.push_back("/data/data/com.mojang.minecraftpe/files/mods/AnimatedMojang");
     candidates.push_back("/sdcard/Android/data/com.mojang.minecraftpe/files/mods/AnimatedMojang");
     candidates.push_back("/sdcard/Android/data/com.mojang.minecraftpe/files/levilamina/mods/AnimatedMojang");
 
+    bool resolved = false;
     for (const auto& candidate : candidates) {
         if (std::filesystem::exists(candidate / "resources" / "data" / "normal_cave.mesh", ec)) {
             setModDir(candidate);
             getLogger().info("Resolved mod directory: ", candidate.string());
+            resolved = true;
             break;
         }
+    }
+
+    if (!resolved) {
+        getLogger().warn("Failed to find normal_cave.mesh in any candidate path. Defaulting to: ", getModDir().string());
     }
 
     // Check for local mod resources directory

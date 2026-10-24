@@ -4,7 +4,7 @@
 [![Engine](https://img.shields.io/badge/Engine-Bedrock%20v1.26.44.3--v1.26.52.3+-blue.svg)](https://minecraft.net)
 [![Architecture](https://img.shields.io/badge/Architecture-Native%20C%2B%2B-orange.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 [![Package](https://img.shields.io/badge/Package-animated__mojang.levipack-blueviolet.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
-[![Version](https://img.shields.io/badge/Version-1.0.0-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
+[![Version](https://img.shields.io/badge/Version-1.0.1-purple.svg)](https://github.com/spygamingog/Animated-Mojang-Android)
 
 A high-performance native C++ client mod for **Minecraft Bedrock Edition (Android ARM64)** that renders a real-time 60 FPS 3D cave background, hardware-accelerated animated Minecraft title sequence, and seamless sub-menu camera transitions.
 
@@ -40,17 +40,20 @@ A high-performance native C++ client mod for **Minecraft Bedrock Edition (Androi
 
 ## Key Features
 
-- **Embedded OpenGL ES 3.0 Cave Renderer**: Renders the authentic `normal_cave.mesh` (98,094 vertices) at 60 FPS with baked lighting, animated lava UVs, and soul torches via dynamic GOT hooking on `glClear`.
-- **Hardware-Accelerated Title Animation**: Direct 69-frame Minecraft title sequence rendered on the GPU render thread without JSON UI distortion.
+- **Embedded OpenGL ES 3.0 Cave Renderer**: Renders the authentic `normal_cave.mesh` (98,094 vertices) at 60 FPS+ with baked lighting, animated lava UVs, and soul torches via dynamic GOT hooking on `glClear`. Fully compatible with offscreen render target FBOs on flagship Adreno 740/750 GPUs.
+- **Hardware-Accelerated Title Animation & Progressive Streaming**: Direct 69-frame Minecraft title sequence rendered on the GPU render thread without JSON UI distortion. Texture strips are progressively streamed and uploaded during the initial 4.0s camera flight (1 strip every 350ms), eliminating frame stutters during the animation sequence.
+- **Dynamic VRAM Eviction (~460 MB Reclaimed)**: Once the title sequence settles at frame 68, unused strips 0 through 7 are immediately purged from GPU VRAM, preventing out-of-memory crashes on low-to-mid-range Android devices while retaining the static resting title.
+- **Start Screen & Sub-Menu Isolation**: Title visibility is strictly isolated to the main start screen (`currentPage == Main`). Internal transitional routes (`/pre-start`) are filtered out, and modal dialogues (`sModalDialogueActive`) suppress title rendering—guaranteeing that navigating to Settings, Play, or opening 'Leave Game' confirmation popups immediately and cleanly hides the title without bleed or occlusion.
+- **High-Refresh Gaming Display Support**: Frame limiter tuned for fluid 120 Hz, 144 Hz, and 165 Hz refresh rates with sub-millisecond render thresholds.
 - **Cinematic Timeline & Button Fade-In**:
-  - `0.0s – 4.0s`: 3D camera spline flight through the cave with menu buttons hidden.
-  - `4.0s – 6.0s`: Camera settles at the title vista and plays the animated title sequence.
+  - `0.0s – 4.0s`: 3D camera spline flight through the cave with menu buttons hidden; background preloader streams title texture strips into VRAM.
+  - `4.0s – 6.0s`: Camera settles at the title vista and plays the animated title sequence at a silky 60/120 FPS.
   - `6.0s – 7.5s`: Start screen buttons smoothly fade into view over 1.5 seconds.
   - `7.5s+`: Full interactive idle menu with zero GPU overlay overhead.
-- **Sub-Menu Camera Navigation**: Smooth camera glides to dedicated viewpoints for Worlds, Settings, Realms, Dressing Room, and Marketplace screens, returning smoothly to Main on exit.
+- **Sub-Menu Camera Navigation & Smooth Title Fade**: Smooth camera glides to dedicated viewpoints for Worlds, Settings, Realms, Dressing Room, and Marketplace screens, smoothly fading out the title during transitions and returning smoothly on exit.
 - **Zero Resource Pack Requirement**: Suppresses vanilla panorama and Ancient City cubemap directly in memory.
 - **Zero In-World Overhead**: Cave rendering automatically pauses during gameplay to preserve vanilla skies.
-- **EGL Context Loss Recovery**: Automatically reinitializes shaders, buffers, and textures on Android app switch or context reload.
+- **EGL Context Loss Recovery**: Automatically reinitializes shaders, buffers, and textures on Android app switch or context reload without dead handle crashes.
 
 ---
 

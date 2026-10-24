@@ -29,13 +29,21 @@ public:
     // Render the 2D animated title on active EGL render context
     bool renderTitle(float screenWidth, float screenHeight, int titleFrame, float titleAlpha = 1.0f);
 
+    // Progressive preloader: loads 1 title texture strip at a time to eliminate animation hitching without freezing
+    bool preloadTitleStrip(int stripIndex);
+    bool preloadTitleTextures();
+    void resetTitlePreload() {
+        mNextStripToPreload = 0;
+        mLastPreloadTimeMs = 0.0;
+    }
+
     // Capture clean background (Cave + Title) before UI buttons render
     bool captureFadeBackground(float screenWidth, float screenHeight);
 
     // Render clean background overlay over UI to fade buttons in slowly
     bool renderFadeOverlay(float screenWidth, float screenHeight, float overlayAlpha);
 
-    void destroy();
+    void destroy(bool contextLost = false);
 
     bool isModelLoaded() const { return !mVertices.empty(); }
     size_t getVertexCount() const { return mVertices.size(); }
@@ -88,6 +96,8 @@ private:
 
     bool mGlReady = false;
     bool mGlFailed = false;
+    int mNextStripToPreload = 0;
+    double mLastPreloadTimeMs = 0.0;
 
     bool initShaders();
     bool initVbo();

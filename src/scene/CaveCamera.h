@@ -69,7 +69,8 @@ inline std::optional<CavePage> cavePageForRoute(std::string_view route) {
     const auto is = [&](std::string_view root) {
         return route == root || (route.starts_with(root) && route.size() > root.size() && route[root.size()] == '/');
     };
-    if (is("/main-menu") || is("/pre-start") || route == "start_screen" || route == "main_menu_screen" || route == "/pre-start") return CavePage::Main;
+    if (is("/pre-start") || route == "/pre-start") return std::nullopt;
+    if (is("/main-menu") || route == "start_screen" || route == "main_menu_screen") return CavePage::Main;
     if (is("/realms") || is("/realm") || is("/play/realms") || is("/join-realms-server") || is("/post-to-realm-stories") || route.find("realm") != std::string_view::npos) return CavePage::Realms;
     for (auto root : {"/realms-pdp", "/realms-plan-picker-v1", "/realms-plan-picker-v2", "/realms-choose-realm",
             "/realms-choose-slot", "/realms-purchase-complete-v1", "/realms-purchase-complete-v2",
@@ -146,6 +147,7 @@ struct CaveCameraFrame {
     std::uint64_t revision = 0;
     double motionTimeMs = 0;
     float loadingBackdropAlpha = 1;
+    float titleAlpha = 1.0f;
 };
 class CaveCameraController {
     CavePose pose = caveOpeningStart, start = caveOpeningStart, target = caveTitle;
@@ -164,7 +166,7 @@ public:
         ++revision;
     }
     CaveCameraFrame update(double nowMs, std::optional<CavePage> observedPage, Frame const& frame) {
-        if (!std::isfinite(nowMs)) return {pose, false, revision, motionTime, !observed && !openingDone ? 1.f : 0.f};
+        if (!std::isfinite(nowMs)) return {pose, false, revision, motionTime, !observed && !openingDone ? 1.f : 0.f, page == CavePage::Main ? 1.f : 0.f};
         const double gap = lastTime >= 0 ? std::max(nowMs - lastTime, 0.0) : 0;
         // A stalled renderer cannot show new frames. Discard the blocked time
         // and resume with one ordinary frame instead of consuming 100ms at once.
@@ -228,6 +230,24 @@ public:
             }
             transitionAt = -1;
         }
+        float titleAlpha = 1.0f;
+        if (transitionAt >= 0) {
+            const float progress = std::clamp(static_cast<float>((clock - transitionAt) / kPageTransitionDurationMs), 0.0f, 1.0f);
+            const float easeProgress = cameraEase(progress);
+            if (page == CavePage::Main) {
+                titleAlpha = easeProgress;
+            } else {
+                titleAlpha = 1.0f - easeProgress;
+            }
+        } else {
+            titleAlpha = (page == CavePage::Main) ? 1.0f : 0.0f;
+        }
+        if (page == CavePage::Main && !openingDone) {
+            if (frame.phase == Phase::MenuOpening && frame.elapsedMs < 4000.0) {
+                titleAlpha = 0.0f;
+            }
+        }
+
         // The fixed world loading plane fades before the title
         // starts at 1880ms. Skip/replay use the same presentation clock.
         const float loadingAlpha = !observed && frame.phase == Phase::Waiting ? 1.f
@@ -235,7 +255,7 @@ public:
             ? frame.phase == Phase::Waiting ? 1.f
               : frame.phase == Phase::MenuOpening ? 1.f - Timeline::unit((frame.elapsedMs - 1000) / 500) : 0.f
             : 0.f;
-        return {pose, moving, revision, motionTime, loadingAlpha};
+        return {pose, moving, revision, motionTime, loadingAlpha, titleAlpha};
     }
 };
 inline glm::mat4 caveView(CavePose pose, double timeMs) {

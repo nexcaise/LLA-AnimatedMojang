@@ -45,52 +45,56 @@ GLuint compileShader(GLenum type, const char* source) {
 CaveGlesRenderer::CaveGlesRenderer() = default;
 
 CaveGlesRenderer::~CaveGlesRenderer() {
-    destroy();
+    destroy(false);
 }
 
-void CaveGlesRenderer::destroy() {
-    if (mVbo) {
-        glDeleteBuffers(1, &mVbo);
-        mVbo = 0;
-    }
-    if (mAtlasTexture) {
-        glDeleteTextures(1, &mAtlasTexture);
-        mAtlasTexture = 0;
-    }
-    if (mProgram) {
-        glDeleteProgram(mProgram);
-        mProgram = 0;
-    }
-    if (mTitleVbo) {
-        glDeleteBuffers(1, &mTitleVbo);
-        mTitleVbo = 0;
-    }
-    for (auto& tex : mTitleTextures) {
-        if (tex != 0) {
-            glDeleteTextures(1, &tex);
-            tex = 0;
+void CaveGlesRenderer::destroy(bool contextLost) {
+    if (!contextLost) {
+        if (mVbo) {
+            glDeleteBuffers(1, &mVbo);
+        }
+        if (mAtlasTexture) {
+            glDeleteTextures(1, &mAtlasTexture);
+        }
+        if (mProgram) {
+            glDeleteProgram(mProgram);
+        }
+        if (mTitleVbo) {
+            glDeleteBuffers(1, &mTitleVbo);
+        }
+        for (auto& tex : mTitleTextures) {
+            if (tex != 0) {
+                glDeleteTextures(1, &tex);
+            }
+        }
+        if (mTitleProgram) {
+            glDeleteProgram(mTitleProgram);
+        }
+        if (mFadeTexture) {
+            glDeleteTextures(1, &mFadeTexture);
+        }
+        if (mFadeVbo) {
+            glDeleteBuffers(1, &mFadeVbo);
+        }
+        if (mFadeProgram) {
+            glDeleteProgram(mFadeProgram);
         }
     }
-    if (mTitleProgram) {
-        glDeleteProgram(mTitleProgram);
-        mTitleProgram = 0;
-    }
-    if (mFadeTexture) {
-        glDeleteTextures(1, &mFadeTexture);
-        mFadeTexture = 0;
-    }
-    if (mFadeVbo) {
-        glDeleteBuffers(1, &mFadeVbo);
-        mFadeVbo = 0;
-    }
-    if (mFadeProgram) {
-        glDeleteProgram(mFadeProgram);
-        mFadeProgram = 0;
-    }
+    mVbo = 0;
+    mAtlasTexture = 0;
+    mProgram = 0;
+    mTitleVbo = 0;
+    mTitleTextures.fill(0);
+    mTitleProgram = 0;
+    mFadeTexture = 0;
+    mFadeVbo = 0;
+    mFadeProgram = 0;
     mFadeTexWidth = 0;
     mFadeTexHeight = 0;
     mGlReady = false;
     mGlFailed = false;
+    mNextStripToPreload = 0;
+    mLastPreloadTimeMs = 0.0;
 }
 
 bool CaveGlesRenderer::loadTitleAnimation(const std::filesystem::path& titleDir) {
@@ -260,9 +264,12 @@ bool CaveGlesRenderer::ensureGlInitialized() {
             return true;
         }
         logger().warn("CaveGlesRenderer: OpenGL ES context was recreated or lost after app switch/reload. Re-initializing GPU resources...");
-        destroy();
+        destroy(true);
     }
-    if (mGlFailed) return false;
+    if (mGlFailed) {
+        // Allow recovery after context loss
+        mGlFailed = false;
+    }
 
     logger().info("CaveGlesRenderer: Initializing OpenGL ES resources on render thread...");
 
@@ -289,6 +296,10 @@ bool CaveGlesRenderer::ensureGlInitialized() {
             logger().warn("CaveGlesRenderer: Title GPU shaders or VBO initialization failed.");
         }
     }
+
+    // Pre-initialize fade shaders and VBO to avoid runtime GPU reallocation hitch at 6.0s
+    initFadeShaders();
+    initFadeVbo();
 
     mGlReady = true;
     logger().info("CaveGlesRenderer: 100% OpenGL ES 3D Cave GPU pipeline ready!");
@@ -357,6 +368,54 @@ bool CaveGlesRenderer::initTitleVbo() {
     return mTitleVbo != 0;
 }
 
+bool CaveGlesRenderer::preloadTitleStrip(int stripIndex) {
+    if (stripIndex < 0 || stripIndex >= 9) return false;
+    if (mTitleTextures[stripIndex] != 0) return true;
+    if (mTitleDir.empty() || !std::filesystem::exists(mTitleDir)) return false;
+
+    auto stripPath = mTitleDir / ("minecraft_" + std::to_string(stripIndex) + ".png");
+    if (!std::filesystem::exists(stripPath)) {
+        static bool sWarnedMissing = false;
+        if (!sWarnedMissing) {
+            sWarnedMissing = true;
+            logger().warn("CaveGlesRenderer: Missing title strip file: ", stripPath.string());
+        }
+        return false;
+    }
+
+    int width = 0, height = 0, channels = 0;
+    unsigned char* pixels = stbi_load(stripPath.c_str(), &width, &height, &channels, 4);
+    if (!pixels) {
+        logger().warn("CaveGlesRenderer: Failed to decode title strip: ", stripPath.string());
+        return false;
+    }
+
+    glGenTextures(1, &mTitleTextures[stripIndex]);
+    glBindTexture(GL_TEXTURE_2D, mTitleTextures[stripIndex]);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    stbi_image_free(pixels);
+    logger().info("CaveGlesRenderer: Loaded title strip ", stripIndex, " (", width, "x", height, ") -> GPU tex ", mTitleTextures[stripIndex]);
+    return true;
+}
+
+bool CaveGlesRenderer::preloadTitleTextures() {
+    bool allLoaded = true;
+    for (int stripIndex = 0; stripIndex < 9; ++stripIndex) {
+        if (!preloadTitleStrip(stripIndex)) {
+            allLoaded = false;
+        }
+    }
+    return allLoaded;
+}
+
 bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int titleFrame, float titleAlpha) {
     if (titleFrame < 0 || titleAlpha <= 0.01f || mTitleDir.empty()) return false;
     if (!mTitleProgram || !mTitleVbo) {
@@ -367,45 +426,16 @@ bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int ti
     int stripIndex = frame / 8; // 0 to 8
     int subFrame = frame % 8;   // 0 to 7
 
-    // On-demand GPU upload of the required title strip (minecraft_0.png .. minecraft_8.png)
+    // Fallback on demand: ensure texture is resident in VRAM
     if (mTitleTextures[stripIndex] == 0) {
-        auto stripPath = mTitleDir / ("minecraft_" + std::to_string(stripIndex) + ".png");
-        if (!std::filesystem::exists(stripPath)) {
-            static bool sWarnedMissing = false;
-            if (!sWarnedMissing) {
-                sWarnedMissing = true;
-                logger().warn("CaveGlesRenderer: Missing title strip file: ", stripPath.string());
-            }
-            return false;
-        }
-
-        int width = 0, height = 0, channels = 0;
-        unsigned char* pixels = stbi_load(stripPath.c_str(), &width, &height, &channels, 4);
-        if (!pixels) {
-            logger().warn("CaveGlesRenderer: Failed to decode title strip: ", stripPath.string());
-            return false;
-        }
-
-        glGenTextures(1, &mTitleTextures[stripIndex]);
-        glBindTexture(GL_TEXTURE_2D, mTitleTextures[stripIndex]);
-
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
-        glBindTexture(GL_TEXTURE_2D, 0);
-
-        stbi_image_free(pixels);
-        logger().info("CaveGlesRenderer: Uploaded title strip ", stripIndex, " (", width, "x", height, ") -> GPU tex ", mTitleTextures[stripIndex]);
+        preloadTitleStrip(stripIndex);
     }
 
     GLuint curTex = mTitleTextures[stripIndex];
     if (curTex == 0) return false;
 
-    // Memory optimization: once animation reaches frame 68 (resting strip 8), purge strips 0..7 from VRAM
-    if (stripIndex == 8) {
+    // Once resting on frame 68 (strip 8), purge strips 0..7 to reclaim VRAM
+    if (stripIndex == 8 && frame == 68) {
         for (int i = 0; i < 8; ++i) {
             if (mTitleTextures[i] != 0) {
                 glDeleteTextures(1, &mTitleTextures[i]);
@@ -461,6 +491,8 @@ bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int ti
         { x,     y + h, u0, v1 }
     };
 
+    GLint prevFbo = 0; glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    GLint prevViewport[4] = {0, 0, 0, 0}; glGetIntegerv(GL_VIEWPORT, prevViewport);
     GLint prevVao = 0; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
     glBindVertexArray(0);
     GLint prevProgram = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
@@ -473,7 +505,12 @@ bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int ti
     GLint prevBlendSrc = 0, prevBlendDst = 0;
     glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrc);
     glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
+    GLboolean prevDepthMask = GL_TRUE; glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    GLboolean prevColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE}; glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
 
+    glViewport(0, 0, static_cast<GLsizei>(screenWidth), static_cast<GLsizei>(screenHeight));
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glEnable(GL_BLEND);
@@ -516,6 +553,10 @@ bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int ti
     if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
     if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     glBlendFunc(prevBlendSrc, prevBlendDst);
+    glDepthMask(prevDepthMask);
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
 
     return true;
 }
@@ -523,6 +564,13 @@ bool CaveGlesRenderer::renderTitle(float screenWidth, float screenHeight, int ti
 bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::mat4& viewMatrix, double timeMs) {
     if (!ensureGlInitialized()) return false;
     if (mVertices.empty()) return false;
+
+    // Progressive preloading of title texture strips across the 4.0s intro flight
+    if (mNextStripToPreload < 9 && (timeMs - mLastPreloadTimeMs >= 350.0)) {
+        preloadTitleStrip(mNextStripToPreload);
+        ++mNextStripToPreload;
+        mLastPreloadTimeMs = timeMs;
+    }
 
     // 1. Calculate perspective projection and MVP matrix
     glm::mat4 projection = glm::perspective(glm::radians(50.0f), screenWidth / screenHeight, 0.1f, 150.0f);
@@ -532,6 +580,7 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     float lavaOffset = static_cast<float>(std::fmod(std::floor(std::max(0.0, timeMs) / 300.0), 32.0)) * (16.0f / 768.0f);
 
     // 3. Preserve preceding OpenGL ES state
+    GLint prevFbo = 0; glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
     GLint prevViewport[4] = {0, 0, 0, 0};
     glGetIntegerv(GL_VIEWPORT, prevViewport);
     GLint prevVao = 0; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
@@ -548,9 +597,12 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
     GLboolean prevDepthMask = GL_TRUE;
     glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    GLboolean prevColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
 
     // 4. Configure GL state for 3D Cave room
     glViewport(0, 0, static_cast<GLsizei>(screenWidth), static_cast<GLsizei>(screenHeight));
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LEQUAL);
     glDepthMask(GL_TRUE);
@@ -607,11 +659,13 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     glUseProgram(prevProgram);
 
     glDepthMask(prevDepthMask);
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
     if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
     if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
     if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     glBlendFunc(prevBlendSrc, prevBlendDst);
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
 
     return true;
 }

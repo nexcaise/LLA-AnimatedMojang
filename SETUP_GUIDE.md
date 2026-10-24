@@ -54,11 +54,11 @@ The configuration file is automatically created at `mods/AnimatedMojang/config/c
 
 ## 4. Cinematic Intro & Transition Timeline
 
-- **0.0s – 4.0s (Camera Flight)**: 3D camera spline flight through the cave to the title viewpoint (`cameraFlightMs = 4000.0`). Start buttons and title remain hidden.
-- **4.0s – 6.0s (Title Sequence)**: Camera holds at the title viewpoint while the hardware-accelerated animated Minecraft title plays across 69 frames (`titleDelayMs = 4000.0`).
-- **6.0s – 7.5s (Button Fade-In)**: Start screen buttons appear and smoothly fade in over 1.5 seconds (`menuFadeMs = 1500.0`) via clean GPU background frame capture and smoothstep overlay blending.
+- **0.0s – 4.0s (Camera Flight & Progressive Preload)**: 3D camera spline flight through the cave to the title viewpoint (`cameraFlightMs = 4000.0`). Start buttons and title remain hidden while 1 title texture strip is progressively uploaded to GPU VRAM every 350ms, guaranteeing zero hitching during playback.
+- **4.0s – 6.0s (Title Sequence)**: Camera holds at the title viewpoint while the hardware-accelerated animated Minecraft title plays across 69 frames (`titleDelayMs = 4000.0`) at 60/120 FPS.
+- **6.0s – 7.5s (Button Fade-In & VRAM Eviction)**: Unused animation strips 0 through 7 are purged from GPU VRAM to reclaim ~460 MB, retaining only resting strip 8. Start screen buttons appear and smoothly fade in over 1.5 seconds (`menuFadeMs = 1500.0`) via clean GPU background frame capture and smoothstep overlay blending.
 - **7.5s+ (Interactive Idle)**: Full interactive idle state with zero GPU overlay overhead.
-- **Sub-Menu Navigation**: Clicking Play, Settings, Realms, Dressing Room, or Marketplace triggers a smooth camera glide to dedicated viewpoints. Exiting any sub-menu smoothly glides back to Main.
+- **Sub-Menu Navigation**: Clicking Play, Settings, Realms, Dressing Room, or Marketplace triggers a smooth camera glide to dedicated viewpoints, while immediately hiding the title. Exiting any sub-menu smoothly glides back to Main and restores the title.
 
 ---
 
@@ -82,4 +82,8 @@ This builds `libAnimatedMojang.so`, bundles the assets, and outputs `dist/animat
 1. **Zero Resource Pack (Zero RP)**: Functional memory detours directly suppress RenderDragon's vanilla 2D panorama and Ancient City cubemap.
 2. **Multi-Segment Memory Scanner**: Scans all readable and executable memory mappings in `/proc/self/maps` using `std::memchr`, eliminating issues with split ELF segments.
 3. **Dynamic ELF GOT Resolution**: Discovers GOT slots for `glClear`, `glColorMask`, and `eglSwapBuffers` at runtime via `PT_DYNAMIC` / `DT_JMPREL` relocation parsing, avoiding hardcoded GOT RVAs.
-4. **EGL Context Recovery**: Automatically detects Android EGL context invalidation on app switch or minimize, rebuilding shaders, VBOs, and textures seamlessly.
+4. **Adreno 740+ Offscreen FBO Compatibility**: Full preservation and restoration of active framebuffers (`GL_FRAMEBUFFER_BINDING`), ensuring 3D cave rendering succeeds on Snapdragon 8 Gen 2/3 devices (e.g., Red Magic 8 Pro) where RenderDragon uses offscreen render target FBOs.
+5. **Progressive Title Texture Preloading & VRAM Eviction**: Staggers the upload of heavy 57.6 MB title texture strips across the 4.0s camera flight (1 strip every 350ms) to eliminate frame-drop hitches, then immediately deletes intermediate strips 0–7 once resting at frame 68, reclaiming ~460 MB of VRAM.
+6. **Strict Start Screen & Sub-Menu Isolation**: Renders the animated title during `glClear` bound strictly to `sIsStartScreen && currentPage == Main && !sModalDialogueActive`. Internal transitional routes (`/pre-start`) are filtered out, guaranteeing that the title never bleeds into Settings, Play, or modal confirmation dialogues.
+7. **High-Refresh Display Frame Pacing**: Sub-millisecond render threshold guarantees jitter-free 120 Hz, 144 Hz, and 165 Hz presentation.
+8. **EGL Context Recovery & Memory Hardening**: Automatically detects Android EGL context invalidation on app switch or minimize, safely rebuilding shaders and VBOs without dead handle crashes, backed by W^X-compliant anonymous mmap trampolines.

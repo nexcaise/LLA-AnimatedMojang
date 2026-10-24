@@ -75,6 +75,9 @@ std::atomic_bool sIsInWorld = false;
 std::atomic_bool sIsLoading = true;
 std::atomic_bool sInsideCaveRender = false;
 std::atomic_bool sNormalLoadingComplete = false;
+std::atomic_bool sIsStartScreen = true;
+std::atomic_bool sModalDialogueActive = false;
+std::atomic<double> sLastStartMenuTickMs = 0.0;
 
 bool isMainMenuActive() {
     return active.load() && sNormalLoadingComplete.load() && sIsMainMenu.load() && !sIsInWorld.load() && !sIsLoading.load();
@@ -277,6 +280,43 @@ static GetTechStackFn sOriginalGetTechStack = nullptr;
 
 static int Hooked_ScreenTechStackSelector_getTechStackForScreen(void* self, std::string const& name) {
     if (active.load()) {
+        std::string lowerName = name;
+        for (char& c : lowerName) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+        // Internal engine transition route between menus: ignore and do not reset start screen state
+        if (lowerName == "/pre-start" || lowerName.find("pre-start") != std::string::npos) {
+            if (sOriginalGetTechStack) {
+                return sOriginalGetTechStack(self, name);
+            }
+            return 0;
+        }
+
+        const bool isStart = (lowerName == "start_screen" || lowerName == "/main-menu"
+            || lowerName == "main_menu_screen"
+            || matches(runtime.config.menuScreenNames, name) || matches(runtime.config.menuScreenNames, lowerName));
+
+        const bool isModal = (lowerName.find("dialog") != std::string::npos
+            || lowerName.find("modal") != std::string::npos
+            || lowerName.find("popup") != std::string::npos
+            || lowerName.find("quit") != std::string::npos
+            || lowerName.find("leave") != std::string::npos
+            || lowerName.find("exit") != std::string::npos
+            || lowerName.find("alert") != std::string::npos
+            || lowerName.find("prompt") != std::string::npos
+            || lowerName.find("confirm") != std::string::npos);
+
+        if (isModal) {
+            sModalDialogueActive.store(true);
+            sIsStartScreen.store(false);
+            logger().info("[AnimatedMojang] Modal/dialogue screen detected: ", name, " -> title suppressed");
+        } else if (isStart) {
+            sIsStartScreen.store(true);
+            sModalDialogueActive.store(false);
+        } else {
+            sIsStartScreen.store(false);
+            sModalDialogueActive.store(false);
+        }
+
         auto page = scene::cavePageForRoute(name);
         if (!page) page = scene::cavePageForScreen(name);
         if (page.has_value()) {
@@ -287,10 +327,15 @@ static int Hooked_ScreenTechStackSelector_getTechStackForScreen(void* self, std:
                 sIsMainMenu.store(true);
                 sIsInWorld.store(false);
                 sIsLoading.store(false);
+                if (*page == scene::CavePage::Main) {
+                    sIsStartScreen.store(true);
+                    sModalDialogueActive.store(false);
+                } else {
+                    sIsStartScreen.store(false);
+                }
             }
         }
-        if (name == "/main-menu" || name == "start_screen" || name == "/pre-start"
-            || name == "/start-from-template" || matches(runtime.config.menuScreenNames, name)) {
+        if (isStart || name == "/start-from-template") {
             return 0; // TechStack::JsonUI (0)
         }
     }
@@ -346,6 +391,8 @@ static void Hooked_StartMenuScreenController_onOpen(void* self) {
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
+        sIsStartScreen.store(true);
+        sModalDialogueActive.store(false);
 
         // Right after normal loading is complete, load files from resource folder, then load cave
         onNormalLoadingComplete();
@@ -353,6 +400,7 @@ static void Hooked_StartMenuScreenController_onOpen(void* self) {
         std::lock_guard guard(runtime.mutex);
         if (runtime.enteredMenu && runtime.config.replayOnReturnToMenu) {
             runtime.pendingReplay = true;
+            runtime.caveRenderer.resetTitlePreload();
         }
         runtime.enteredMenu = true;
 
@@ -368,6 +416,8 @@ static void Hooked_StartMenuScreenController_onOpen(void* self) {
         if (runtime.currentPage != scene::CavePage::Main) {
             logger().info("[AnimatedMojang] StartMenu onOpen: Camera smoothly returning to initial Main vista (caveTitle).");
             runtime.currentPage = scene::CavePage::Main;
+            sIsStartScreen.store(true);
+            sModalDialogueActive.store(false);
         }
     }
     if (sOriginalMenuOpen) {
@@ -382,6 +432,16 @@ static std::atomic<bool> sFirstMenuTick = false;
 
 static void Hooked_StartMenuScreenController_tick(void* self) {
     if (active.load()) {
+        sLastStartMenuTickMs.store(nowMs());
+
+        // Update Start Screen state:
+        // Only mark start screen as active when currentPage is Main and no modal dialogue is active.
+        if (runtime.currentPage == scene::CavePage::Main && !sModalDialogueActive.load()) {
+            sIsStartScreen.store(true);
+        } else {
+            sIsStartScreen.store(false);
+        }
+
         if (!sFirstMenuTick.exchange(true) || sIsLoading.load()) {
             sIsMainMenu.store(true);
             sIsInWorld.store(false);
@@ -415,6 +475,8 @@ static void Hooked_StartMenu_PlayButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Play -> Camera transitioning to Worlds vista");
         runtime.currentPage = scene::CavePage::Worlds;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -436,6 +498,8 @@ static void Hooked_StartMenu_SettingsButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Settings -> Camera transitioning to Settings vista");
         runtime.currentPage = scene::CavePage::Settings;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -457,6 +521,8 @@ static void Hooked_StartMenu_RealmsButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Realms -> Camera transitioning to Realms vista");
         runtime.currentPage = scene::CavePage::Realms;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -478,6 +544,8 @@ static void Hooked_StartMenu_DressingRoomButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Dressing Room (DressingRoomButton) -> Camera transitioning to Dressing Room vista");
         runtime.currentPage = scene::CavePage::DressingRoom;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -499,6 +567,8 @@ static void Hooked_StartMenu_SkinsMenuButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Dressing Room / Skins (SkinsMenuButton) -> Camera transitioning to Dressing Room vista");
         runtime.currentPage = scene::CavePage::DressingRoom;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -520,6 +590,8 @@ static void Hooked_StartMenu_MarketplaceButton(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Marketplace -> Camera transitioning to Marketplace vista");
         runtime.currentPage = scene::CavePage::Marketplace;
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
         sIsInWorld.store(false);
         sIsLoading.store(false);
@@ -536,7 +608,8 @@ static GenericButtonFn sOriginalStartMenuAchievementsButton = nullptr;
 static void Hooked_StartMenu_AchievementsButton(void* a0, void* a1, void* a2) {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
-        logger().info("[AnimatedMojang] Button Clicked: Achievements");
+        sModalDialogueActive.store(true);
+        logger().info("[AnimatedMojang] Button Clicked: Achievements -> Modal dialogue active");
     }
     if (sOriginalStartMenuAchievementsButton) {
         sOriginalStartMenuAchievementsButton(a0, a1, a2);
@@ -547,7 +620,8 @@ static GenericButtonFn sOriginalStartMenuFeedbackButton = nullptr;
 static void Hooked_StartMenu_FeedbackButton(void* a0, void* a1, void* a2) {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
-        logger().info("[AnimatedMojang] Button Clicked: Feedback");
+        sModalDialogueActive.store(true);
+        logger().info("[AnimatedMojang] Button Clicked: Feedback -> Modal dialogue active");
     }
     if (sOriginalStartMenuFeedbackButton) {
         sOriginalStartMenuFeedbackButton(a0, a1, a2);
@@ -558,7 +632,8 @@ static GenericButtonFn sOriginalStartMenuSignInButton = nullptr;
 static void Hooked_StartMenu_SignInButton(void* a0, void* a1, void* a2) {
     if (active.load()) {
         std::lock_guard guard(runtime.mutex);
-        logger().info("[AnimatedMojang] Button Clicked: Sign In");
+        sModalDialogueActive.store(true);
+        logger().info("[AnimatedMojang] Button Clicked: Sign In -> Modal dialogue active");
     }
     if (sOriginalStartMenuSignInButton) {
         sOriginalStartMenuSignInButton(a0, a1, a2);
@@ -571,6 +646,8 @@ static void Hooked_Menu_Exit(void* a0, void* a1, void* a2) {
         std::lock_guard guard(runtime.mutex);
         logger().info("[AnimatedMojang] Button Clicked: Back / Exit (button.menu_exit) -> Returning camera to Main Menu vista");
         runtime.currentPage = scene::CavePage::Main;
+        sIsStartScreen.store(true);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(true);
     }
     if (sOriginalMenuExit) {
@@ -605,6 +682,8 @@ static InGamePlayScreenRenderFn sOriginalInGamePlayScreenRender = nullptr;
 static void Hooked_inGamePlayScreenRender(void* self, void* screenContext, const void* frameObj) {
     if (active.load()) {
         sIsInWorld.store(true);
+        sIsStartScreen.store(false);
+        sModalDialogueActive.store(false);
         sIsMainMenu.store(false);
         sIsLoading.store(false);
     }
@@ -635,6 +714,8 @@ static void Hooked_clientInstanceRequestLeaveGame(void* self, bool b1, bool b2) 
         sIsInWorld.store(false);
         sIsMainMenu.store(true);
         sIsLoading.store(false);
+        sIsStartScreen.store(true);
+        sModalDialogueActive.store(false);
         std::lock_guard guard(runtime.mutex);
         runtime.currentPage = scene::CavePage::Main;
         logger().info("[AnimatedMojang] Leave game detected -> Main menu restored.");
@@ -665,6 +746,9 @@ static CubemapRenderFn sOriginalCubemapRender = nullptr;
 
 static void Hooked_CubemapBackgroundScreen_render(void* self, ScreenContext& ctx, const void* frameObject) {
     if (active.load()) {
+        if (runtime.currentPage == scene::CavePage::Main && !sModalDialogueActive.load()) {
+            sIsStartScreen.store(true);
+        }
         if (sPendingMenuOpenSelf != nullptr && (runtime.frame.phase == Phase::MenuIdle || runtime.frame.elapsedMs >= 6000.0)) {
             triggerPendingStartMenuConstruction();
         }
@@ -776,16 +860,12 @@ static void Hooked_glClear(GLbitfield mask) {
     }
 
     if ((mask & GL_COLOR_BUFFER_BIT) && active.load() && runtime.config.caveBackground) {
-        GLint currentFbo = 0;
-        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &currentFbo);
-        if (currentFbo != 0) return;
-
         GLint vp[4] = {0, 0, 0, 0};
         glGetIntegerv(GL_VIEWPORT, vp);
         if (vp[2] >= 400 && vp[3] >= 300) {
             // Ensure normal loading complete has fired when start menu is up
             if (!sNormalLoadingComplete.load()) {
-                if (sIsMainMenu.load() && !sIsLoading.load()) {
+                if (sIsMainMenu.load() || !sIsLoading.load()) {
                     onNormalLoadingComplete();
                 }
             }
@@ -793,7 +873,7 @@ static void Hooked_glClear(GLbitfield mask) {
             if (isMainMenuActive()) {
                 const double time = nowMs();
                 static double sLastRenderMs = 0.0;
-                if (time - sLastRenderMs < 8.0) return;
+                if (time - sLastRenderMs < 1.0) return; // Smooth support for 120Hz/144Hz/165Hz gaming displays
                 sLastRenderMs = time;
 
                 sInsideCaveRender.store(true);
@@ -802,7 +882,7 @@ static void Hooked_glClear(GLbitfield mask) {
                     updatePresentation(time, runtime.enteredMenu, true);
                     runtime.cameraFrame = runtime.camera.update(time, runtime.currentPage, runtime.frame);
 
-                    // Ensure color mask is enabled while drawing the 3D cave and animated title
+                    // Ensure color mask is enabled while drawing the 3D cave
                     if (sOriginalGlColorMask) {
                         sOriginalGlColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
                     }
@@ -814,13 +894,26 @@ static void Hooked_glClear(GLbitfield mask) {
 
                     // Animated Title rendering directly on GPU render thread (zero RP requirement)
                     // Renders during 4.0s - 6.0s animation and remains stationed as full title at 6.0s+
-                    if (runtime.currentPage == scene::CavePage::Main && runtime.frame.titleFrame >= 0 && runtime.config.minecraftTitleAnimation) {
-                        runtime.caveRenderer.renderTitle(
-                            static_cast<float>(vp[2]),
-                            static_cast<float>(vp[3]),
-                            runtime.frame.titleFrame,
-                            1.0f
-                        );
+                    // STRICT SCREEN ISOLATION: ONLY rendered on the main start screen when no modal dialogue (like leave game) is active
+                    // (disappears immediately on Settings, Play, or any sub-screen).
+                    const bool isStartScreenActive = sIsStartScreen.load()
+                        && !sModalDialogueActive.load()
+                        && (runtime.currentPage == scene::CavePage::Main);
+
+                    if (isStartScreenActive
+                        && runtime.frame.titleFrame >= 0 && runtime.config.minecraftTitleAnimation) {
+                        float effectiveTitleAlpha = runtime.cameraFrame.titleAlpha;
+                        if (runtime.frame.phase == Phase::MenuOpening && runtime.frame.elapsedMs < 6000.0) {
+                            effectiveTitleAlpha = (runtime.frame.elapsedMs >= 4000.0) ? 1.0f : 0.0f;
+                        }
+                        if (effectiveTitleAlpha > 0.01f) {
+                            runtime.caveRenderer.renderTitle(
+                                static_cast<float>(vp[2]),
+                                static_cast<float>(vp[3]),
+                                runtime.frame.titleFrame,
+                                effectiveTitleAlpha
+                            );
+                        }
                     }
 
                     // During 6.0s - 7.5s on Main Start Screen, capture clean background before Bedrock UI pass
@@ -857,9 +950,12 @@ static EGLBoolean Hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surf) {
         if (sOriginalGlColorMask) {
             sOriginalGlColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         }
-    } else {
-        // Slow fade-in of start screen buttons over 1.5s (from 6.0s to 7.5s)
+    }
+
+    if (active.load() && !sIsInWorld.load()) {
         std::lock_guard guard(runtime.mutex);
+
+        // 1. Slow fade-in of start screen buttons over 1.5s (from 6.0s to 7.5s)
         if (runtime.currentPage == scene::CavePage::Main && runtime.frame.phase == Phase::MenuOpening
             && runtime.frame.elapsedMs >= 6000.0 && runtime.frame.elapsedMs < 7500.0) {
             const float progress = std::clamp(static_cast<float>((runtime.frame.elapsedMs - 6000.0) / 1500.0), 0.0f, 1.0f);
@@ -872,6 +968,7 @@ static EGLBoolean Hooked_eglSwapBuffers(EGLDisplay dpy, EGLSurface surf) {
             }
         }
     }
+
     if (sOriginalEglSwapBuffers) {
         return sOriginalEglSwapBuffers(dpy, surf);
     }

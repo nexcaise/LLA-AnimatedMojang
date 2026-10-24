@@ -12,7 +12,6 @@
   "menuScreenNames": [
     "start_screen",
     "/main-menu",
-    "/pre-start",
     "main_menu_screen"
   ],
   "titleControlNames": [
