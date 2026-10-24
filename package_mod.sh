@@ -16,9 +16,15 @@ if [ ! -x "${CXX_BIN}" ]; then
     CXX_BIN="aarch64-linux-gnu-g++"
 fi
 
-echo "=== 1. Building Animated Mojang v1.0.1 for Android ARM64 using ${CXX_BIN} ==="
+# Title animation: the 9 raw strips (494 MB once decoded) are only the SOURCE for the baked atlas.
+if [ ! -f "${SCRIPT_DIR}/resources/textures/animated_mojang/title/baked/title_atlas.json" ]; then
+    echo "=== 0. Baking title atlas ==="
+    python3 "${SCRIPT_DIR}/tools/bake_title_atlas.py"
+fi
+
+echo "=== 1. Building Animated Mojang v1.0.2 for Android ARM64 using ${CXX_BIN} ==="
 rm -rf "${BUILD_DIR}"
-cmake -B "${BUILD_DIR}" -S "${SCRIPT_DIR}" -DCMAKE_CXX_COMPILER="${CXX_BIN}"
+cmake -B "${BUILD_DIR}" -S "${SCRIPT_DIR}" -DCMAKE_CXX_COMPILER="${CXX_BIN}" -DCMAKE_BUILD_TYPE=Release
 cmake --build "${BUILD_DIR}" --config Release -- -j1
 
 echo "=== 2. Verifying Native Binary ABI Exports ==="
@@ -36,6 +42,8 @@ cp -f "${SCRIPT_DIR}/icon.png" "${DIST_DIR}/"
 cp -rf "${SCRIPT_DIR}/config" "${DIST_DIR}/"
 rm -rf "${DIST_DIR}/resources"
 cp -rf "${SCRIPT_DIR}/resources" "${DIST_DIR}/"
+# raw strips are not used at runtime (only by tools/bake_title_atlas.py)
+rm -rf "${DIST_DIR}/resources/textures/animated_mojang/title/minecraft_animation"
 
 # Build Native .levipack
 (

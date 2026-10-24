@@ -130,3 +130,15 @@ Generates `dist/animated_mojang.levipack`.
 
 - Source code: **LGPL-3.0** ([MRUIAW/Animated-Mojang](https://github.com/MRUIAW/Animated-Mojang)).
 - 3D cave model & title assets: **CC0 1.0 Universal** ([chara2015/animated_mojang](https://github.com/chara2015/animated_mojang)).
+
+
+## Building the title atlas (v1.0.2+)
+
+The title animation is loaded from a compact baked atlas instead of the nine raw 55 MB strips:
+
+```bash
+pip install pillow numpy
+python3 tools/bake_title_atlas.py            # writes resources/textures/animated_mojang/title/baked/
+python3 tools/bake_title_atlas.py --scale 0.6  # sharper on very high-resolution screens (more VRAM)
+```
+`package_mod.sh` does this automatically if the baked files are missing and leaves the raw strips out of the package.

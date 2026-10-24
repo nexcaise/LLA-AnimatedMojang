@@ -8,6 +8,8 @@
 #include <elf.h>
 #include <link.h>
 #include <vector>
+#include <string>
+#include <unordered_map>
 
 namespace ll::memory {
 
@@ -259,50 +261,78 @@ static void discoverSegments() {
     }
 }
 
-uintptr_t findSignature(const std::string& patternStr) {
-    discoverSegments();
-    if (sSegments.empty()) return 0;
+namespace detail {
 
-    auto pattern = parseIdaPattern(patternStr);
-    if (pattern.empty()) return 0;
+std::vector<uintptr_t> scanRange(const uint8_t* base, size_t size, const std::vector<std::string>& patterns) {
+    std::vector<std::vector<PatternByte>> parsed;
+    parsed.reserve(patterns.size());
+    for (auto const& p : patterns) parsed.push_back(parseIdaPattern(p));
+    std::vector<uintptr_t> found(patterns.size(), 0);
 
-    size_t anchorIdx = 0;
-    while (anchorIdx < pattern.size() && pattern[anchorIdx].isWildcard) {
-        anchorIdx++;
+    // Bucket patterns by their first byte; a pattern that starts with a wildcard is checked everywhere.
+    std::vector<size_t> buckets[256];
+    std::vector<size_t> anywhere;
+    size_t remaining = 0;
+    for (size_t i = 0; i < parsed.size(); ++i) {
+        if (parsed[i].empty()) continue;
+        ++remaining;
+        if (parsed[i][0].isWildcard) anywhere.push_back(i);
+        else buckets[parsed[i][0].value].push_back(i);
     }
-    if (anchorIdx >= pattern.size()) return 0;
 
-    uint8_t anchorVal = pattern[anchorIdx].value;
-
-    for (const auto& seg : sSegments) {
-        if (seg.size < pattern.size()) continue;
-
-        const uint8_t* startPtr = reinterpret_cast<const uint8_t*>(seg.start);
-        const size_t maxScan = seg.size - pattern.size();
-        const uint8_t* scanPtr = startPtr + anchorIdx;
-        const uint8_t* endPtr = startPtr + seg.size;
-
-        while (scanPtr < endPtr) {
-            const uint8_t* match = static_cast<const uint8_t*>(std::memchr(scanPtr, anchorVal, endPtr - scanPtr));
-            if (!match) break;
-
-            const uint8_t* candidate = match - anchorIdx;
-            if (candidate >= startPtr && candidate <= startPtr + maxScan) {
-                bool fullMatch = true;
-                for (size_t j = 0; j < pattern.size(); ++j) {
-                    if (!pattern[j].isWildcard && candidate[j] != pattern[j].value) {
-                        fullMatch = false;
-                        break;
-                    }
+    const uintptr_t start = reinterpret_cast<uintptr_t>(base);
+    const uintptr_t first = (start + 3) & ~uintptr_t{3};
+    const uint8_t* const end = base + size;
+    for (const uint8_t* p = reinterpret_cast<const uint8_t*>(first); p < end && remaining; p += 4) {
+        auto tryList = [&](const std::vector<size_t>& list) {
+            for (size_t idx : list) {
+                if (found[idx]) continue;
+                auto const& pat = parsed[idx];
+                if (static_cast<size_t>(end - p) < pat.size()) continue;
+                bool match = true;
+                for (size_t j = 1; j < pat.size(); ++j) {
+                    if (!pat[j].isWildcard && p[j] != pat[j].value) { match = false; break; }
                 }
-                if (fullMatch) {
-                    return reinterpret_cast<uintptr_t>(candidate);
-                }
+                if (match) { found[idx] = reinterpret_cast<uintptr_t>(p); --remaining; }
             }
-            scanPtr = match + 1;
-        }
+        };
+        const auto& list = buckets[*p];
+        if (!list.empty()) tryList(list);
+        if (!anywhere.empty()) tryList(anywhere);
     }
-    return 0;
+    return found;
+}
+
+} // namespace detail
+
+static std::unordered_map<std::string, uintptr_t> sSigCache;
+
+void precacheSignatures(const std::vector<std::string>& patterns) {
+    discoverSegments();
+    std::vector<std::string> todo;
+    for (auto const& p : patterns)
+        if (!sSigCache.count(p)) todo.push_back(p);
+    if (todo.empty() || sSegments.empty()) return;
+
+    std::vector<uintptr_t> best(todo.size(), 0);
+    for (const auto& seg : sSegments) { // segment order == original first-match order
+        auto r = detail::scanRange(reinterpret_cast<const uint8_t*>(seg.start), seg.size, todo);
+        bool all = true;
+        for (size_t i = 0; i < todo.size(); ++i) {
+            if (!best[i]) best[i] = r[i];
+            all = all && best[i];
+        }
+        if (all) break;
+    }
+    for (size_t i = 0; i < todo.size(); ++i) sSigCache[todo[i]] = best[i];
+}
+
+uintptr_t findSignature(const std::string& patternStr) {
+    auto it = sSigCache.find(patternStr);
+    if (it != sSigCache.end()) return it->second;
+    precacheSignatures({patternStr});
+    auto again = sSigCache.find(patternStr);
+    return again != sSigCache.end() ? again->second : 0;
 }
 
 bool hookSignature(const std::string& pattern, void* detour, void** original, uintptr_t fallbackRva) {

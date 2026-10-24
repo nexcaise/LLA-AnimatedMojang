@@ -15,6 +15,8 @@ MyMod& MyMod::getInstance() {
 }
 
 bool MyMod::load() {
+    if (mLoaded) return true; // PLGetModRegistration, JNI_OnLoad and the shims may all call load()
+    mLoaded = true;
     getLogger().info("Initializing Animated Mojang on Android ARM64 (LeviLaunchroid)...");
 
     // Discover base directory dynamically
@@ -68,11 +70,19 @@ bool MyMod::load() {
         try {
             std::ifstream f(cfgPath);
             nlohmann::json j = nlohmann::json::parse(f);
+            mConfig.version = j.value("version", mConfig.version);
             mConfig.enabled = j.value("enabled", true);
             mConfig.preferJsonMainMenu = j.value("preferJsonMainMenu", true);
             mConfig.caveBackground = j.value("caveBackground", true);
             mConfig.minecraftTitleAnimation = j.value("minecraftTitleAnimation", true);
+            mConfig.restyleLoadingProgress = j.value("restyleLoadingProgress", true);
+            mConfig.replayOnReturnToMenu = j.value("replayOnReturnToMenu", false);
+            mConfig.blockMenuInputDuringIntro = j.value("blockMenuInputDuringIntro", true);
+            mConfig.debugScreens = j.value("debugScreens", false);
             mConfig.maxPresentationSeconds = j.value("maxPresentationSeconds", 15.0);
+            if (j.contains("titleControlNames")) {
+                mConfig.titleControlNames = j["titleControlNames"].get<std::vector<std::string>>();
+            }
             if (j.contains("menuScreenNames")) {
                 mConfig.menuScreenNames = j["menuScreenNames"].get<std::vector<std::string>>();
             }

@@ -12,6 +12,7 @@ private:
     std::filesystem::path mModDir{"/sdcard/Android/data/com.mojang.minecraftpe/files/levilamina/mods/AnimatedMojang"};
     std::filesystem::path mConfigDir{"/sdcard/Android/data/com.mojang.minecraftpe/files/levilamina/mods/AnimatedMojang/config"};
     ll::Logger mLogger{"AnimatedMojang"};
+    bool mLoaded = false;
 
 public:
     static MyMod& getInstance();

@@ -3,7 +3,7 @@
   "name": "AnimatedMojang",
   "author": "SpyGamingOG",
   "description": "by SpyGamingOG",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "entry": "libAnimatedMojang.so",
   "icon": "icon.png",
   "dependencies": [],

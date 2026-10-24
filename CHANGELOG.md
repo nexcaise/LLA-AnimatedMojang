@@ -3,6 +3,41 @@
 All notable changes to **Animated Mojang (Android ARM64)** are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and follows [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-10-24
+
+### Performance
+- **Title images: 494 MB -> 52 MB, then ~8 MB.** The nine 2403x5992 strips (55 MB each when decoded) are baked offline
+  (`tools/bake_title_atlas.py`) into four 2048x2048 premultiplied atlas pages: per-frame alpha crop, 0.5x Lanczos
+  downscale, duplicate removal. Once the title rests, only the page holding the resting frame stays in VRAM.
+- **No decoding on the render thread.** Mesh, atlas and title PNGs are decoded on low-priority worker threads; the GL
+  thread only uploads (<= 256 rows / ~2 MB per frame). A missing page is skipped for a frame instead of stalling it.
+- **Cave renderer**: vertices de-duplicated (98,094 -> 62,447) and packed 36 -> 24 bytes, 16-bit indexed, one VAO;
+  triangles are classified at load time so the 99.6% fully opaque ones draw with no `discard` and no blending (early-Z
+  works); the 138 cutout triangles draw last. Title/fade use one static quad + uniforms (no per-frame `glBufferData`).
+- **Release build.** `CMakeLists.txt` had no build type, so everything (stb PNG decoding, JSON, glm) ran at -O0.
+  Default is now `Release` (`-O2`, gc-sections).
+- Fewer GL queries: one state save/restore per frame for cave + title + capture, `eglGetCurrentContext()` instead of
+  three `glIs*` calls per frame, and the world no longer queries the viewport on every `glClear`.
+- Hook pattern scan is a single aligned multi-pattern pass.
+
+### Fixed
+- Re-enabling the mod after disabling it re-installed every hook on top of itself (infinite recursion). Hooks are now
+  installed once.
+- `stop()` called `glDelete*` from a non-GL thread. Release is now requested and executed on the render thread.
+- Data races: `currentPage`, timeline phase/elapsed were read by hooks without synchronisation; the render lock was held
+  during all GL work (stalling the main thread). Now atomics + a short critical section.
+- `config.json`: `replayOnReturnToMenu`, `blockMenuInputDuringIntro`, `restyleLoadingProgress`, `debugScreens`,
+  `titleControlNames` were silently ignored; they are parsed now.
+- Presentation timeline now waits for the assets (`assetsReady` was hard-coded to `true`) with a 4 s safety timeout; the
+  vanilla panorama is no longer suppressed if the cave failed to load; the UI colour mask can no longer stay stuck.
+- Shaders: `highp` UVs (mediump could not address 768 atlas rows); GLES 3.00 shaders.
+- State leaks fixed: depth func, scissor/stencil, bound sampler objects, texture unit != 0, unpack row length / PBO.
+- Failure mode no longer recompiles shaders and logs errors every frame (bounded retries).
+
+### Removed (moved to `legacy/`)
+- The unused CPU projection path (`NativeScene`, `CpuProjection`, `UiCaveBatch`, ...). It parsed the mesh and particles
+  a second time at startup but was never drawn.
+
 ## [1.0.1] - 2026-10-24
 
 ### Fixed

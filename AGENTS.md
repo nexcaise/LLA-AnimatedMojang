@@ -45,6 +45,15 @@
 
 ---
 
+### Performance architecture (v1.0.2)
+- `scene/CaveGlesRenderer`: GLES 3.00, render-thread only; background loading via `std::async` (`loadAll`, title pages).
+- `scene/CaveMeshBuilder.h`: CPU mesh prep (dedup, 24-byte vertices, opaque/cutout split). GL-free, unit-testable.
+- `scene/TitleAtlas.h` + `tools/bake_title_atlas.py`: baked, premultiplied title atlas (`title/baked/`). **Re-run the
+  baker whenever the strips in `title/minecraft_animation/` change.** The strips are not shipped in the package.
+- Never decode images or call `glDelete*` from hook threads; use `requestGlRelease()` / `requestTitleReplay()`.
+
+---
+
 ## 2. Multi-Version Hook Reference Table
 
 | Target Symbol | 1.26.52.3 | 1.26.51.1 | 1.26.45.1 | 1.26.44.3 | Signature / Resolution |

@@ -1,6 +1,6 @@
 #pragma once
 #include "scene/MeshVertex.h"
-#include "scene/CaveAnimation.h"
+#include "scene/CaveConstants.h"
 #include <cmath>
 #include <cstdint>
 #include <cstring>

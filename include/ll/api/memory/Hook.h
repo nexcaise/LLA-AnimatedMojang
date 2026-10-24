@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <type_traits>
 #include <string>
+#include <vector>
 #include <string_view>
 #include <fcntl.h>
 #include <unistd.h>
@@ -67,6 +68,16 @@ LL_API bool hookGotSymbol(const char* symbolName, void* detour, void** original,
 
 /// Find absolute address of an IDA-style byte pattern signature in libminecraftpe.so
 LL_API uintptr_t findSignature(const std::string& pattern);
+
+// Scans libminecraftpe.so ONCE for all patterns (AArch64 code is 4-byte aligned) and caches the results,
+// so the following findSignature()/hookSignature() calls for these patterns are instant.
+LL_API void precacheSignatures(const std::vector<std::string>& patterns);
+
+namespace detail {
+// Core multi-pattern scanner (exposed for tests). Returns one address (or 0) per pattern: the first
+// 4-byte-aligned match in [base, base+size).
+LL_API std::vector<uintptr_t> scanRange(const uint8_t* base, size_t size, const std::vector<std::string>& patterns);
+} // namespace detail
 
 /// Resolve a symbol dynamically from libminecraftpe.so or loaded libraries
 LL_API void* findMinecraftSymbol(const char* symbolName);
