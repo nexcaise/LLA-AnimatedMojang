@@ -48,6 +48,7 @@ jobs:
 
       - name: Run host tests
         run: |
+          chmod +x ./tests/host/run.sh
           ./tests/host/run.sh
 
   android:
@@ -84,7 +85,9 @@ jobs:
           done
 
       - name: Package .levipack
-        run: tools/make_levipack.sh build/libAnimatedMojang.so dist/animated_mojang.levipack
+        run: |
+          chmod +x tools/make_levipack.sh
+          tools/make_levipack.sh build/libAnimatedMojang.so dist/animated_mojang.levipack
 
       - uses: actions/upload-artifact@v4
         with:
