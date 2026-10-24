@@ -39,4 +39,4 @@ set_target_properties(AnimatedMojang PROPERTIES
 )
 
 target_link_options(AnimatedMojang PRIVATE -Wl,--gc-sections)
-target_link_libraries(AnimatedMojang PRIVATE log dl GLESv2 EGL)
+target_link_libraries(AnimatedMojang PRIVATE log dl GLESv3 EGL)
