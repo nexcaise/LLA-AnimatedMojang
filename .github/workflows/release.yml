@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)publish, e.g. v1.0.2"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  check-version:
+    name: Tag matches manifest versions
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.t.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - id: t
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          python3 - "$VER" <<'PY'
+          import json, sys
+          want = sys.argv[1]
+          for f in ("manifest.json", "tooth.json"):
+              got = json.load(open(f))["version"]
+              if got != want:
+                  sys.exit(f"::error::{f} version is {got}, tag says {want}")
+          print("versions OK:", want)
+          PY
+
+  build:
+    needs: check-version
+    uses: ./.github/workflows/build.yml
+
+  publish:
+    name: Publish GitHub release
+    runs-on: ubuntu-24.04
+    needs: [check-version, build]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.check-version.outputs.tag }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: animated_mojang-levipack
+          path: dist
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VER="${{ needs.check-version.outputs.tag }}"; VER="${VER#v}"
+          awk -v v="$VER" '$0 ~ "^## \\[" v "\\]" {f=1; next} /^## \[/ {f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Release $VER" > notes.md
+          cat notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.check-version.outputs.tag }}
+          name: Animated Mojang ${{ needs.check-version.outputs.tag }}
+          body_path: notes.md
+          files: dist/animated_mojang.levipack # name matches tooth.json's release URL
+          fail_on_unmatched_files: true

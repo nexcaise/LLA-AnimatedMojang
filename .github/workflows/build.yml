@@ -1,0 +1,99 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore: ["**.md", "LICENSE", "COPYING*"]
+  pull_request:
+  workflow_dispatch:
+  workflow_call: # reused by release.yml
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ANDROID_API: 24 # minSdk for the native mod (GLES 3.0 needs >= 18; 24 matches current Bedrock)
+
+jobs:
+  host-tests:
+    name: Host tests (mesh, atlas, scanner, renderer)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Mesa (software EGL/GLES), g++ and Python deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri
+          python3 -m pip install --user pillow numpy
+
+      - name: Baked title atlas is present and consistent
+        run: |
+          python3 - <<'PY'
+          import json, os
+          d = "resources/textures/animated_mojang/title/baked"
+          m = json.load(open(f"{d}/title_atlas.json"))
+          assert m["version"] == 1 and len(m["frames"]) == 69, "expected 69 frames"
+          for p in m["pages"]:
+              assert os.path.getsize(f"{d}/{p['file']}") > 0, p["file"]
+          print("title atlas OK:", len(m["pages"]), "pages")
+          PY
+
+      - name: Baker still runs on the raw strips (smoke test)
+        run: python3 tools/bake_title_atlas.py --out "$RUNNER_TEMP/baked"
+
+      - name: Run host tests
+        run: |
+          ./tests/host/run.sh
+
+  android:
+    name: Android arm64-v8a (NDK)
+    runs-on: ubuntu-24.04
+    needs: host-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Configure (NDK, Release)
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-${ANDROID_API} \
+            -DANDROID_STL=c++_shared \
+            -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Verify exported ABI
+        run: |
+          NM="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-nm"
+          READELF="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+          "$READELF" -h build/libAnimatedMojang.so | grep -E "Class|Machine"
+          "$NM" -D --defined-only build/libAnimatedMojang.so | tee /tmp/exports.txt
+          for sym in PLGetModRegistration _ZNSt6__ndk113__hash_memoryEPKvm _ZNSt6__ndk112__next_primeEm; do
+            grep -q " $sym\$" /tmp/exports.txt || { echo "::error::missing export $sym"; exit 1; }
+          done
+
+      - name: Package .levipack
+        run: tools/make_levipack.sh build/libAnimatedMojang.so dist/animated_mojang.levipack
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: animated_mojang-levipack
+          path: dist/animated_mojang.levipack
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libAnimatedMojang-arm64-v8a
+          path: build/libAnimatedMojang.so
+          if-no-files-found: error
