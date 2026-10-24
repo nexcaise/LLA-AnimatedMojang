@@ -34,9 +34,8 @@ cp -f "${BUILD_DIR}/libAnimatedMojang.so" "${DIST_DIR}/"
 cp -f "${SCRIPT_DIR}/manifest.json" "${DIST_DIR}/"
 cp -f "${SCRIPT_DIR}/icon.png" "${DIST_DIR}/"
 cp -rf "${SCRIPT_DIR}/config" "${DIST_DIR}/"
-mkdir -p "${DIST_DIR}/resources"
-cp -rf "${SCRIPT_DIR}/resources/data" "${DIST_DIR}/resources/"
-cp -rf "${SCRIPT_DIR}/resources/textures" "${DIST_DIR}/resources/"
+rm -rf "${DIST_DIR}/resources"
+cp -rf "${SCRIPT_DIR}/resources" "${DIST_DIR}/"
 
 # Build Native .levipack
 (
@@ -52,11 +51,12 @@ with zipfile.ZipFile('${LEVIPACK_OUT}', 'w', zipfile.ZIP_DEFLATED) as zf:
 "
 )
 
-# Copy levipack to Download and MG
-cp -f "${LEVIPACK_OUT}" "/sdcard/MG/animated_mojang.levipack" 2>/dev/null || true
-cp -f "${LEVIPACK_OUT}" "/sdcard/Download/animated_mojang.levipack" 2>/dev/null || true
+# Copy strictly animated_mojang.levipack to /sdcard/Fonts/ for manual user testing
+mkdir -p "/sdcard/Fonts"
+cp -f "${LEVIPACK_OUT}" "/sdcard/Fonts/animated_mojang.levipack"
+echo "Copied ${LEVIPACK_OUT} -> /sdcard/Fonts/animated_mojang.levipack"
 
-# Auto-deploy to all active launcher profiles
+# Auto-deploy clean mod files to active launcher profiles
 for profile_dir in /sdcard/Android/media/org.levimc.launcher/minecraft/*/mods; do
     if [ -d "${profile_dir}" ]; then
         mod_dir="${profile_dir}/AnimatedMojang"
@@ -67,27 +67,10 @@ for profile_dir in /sdcard/Android/media/org.levimc.launcher/minecraft/*/mods; d
         cp -rf "${DIST_DIR}/config" "${mod_dir}/"
         rm -rf "${mod_dir}/resources"
         cp -rf "${DIST_DIR}/resources" "${mod_dir}/"
-
-        # Ensure AnimatedMojang is enabled in mods_config.json
-        cfg_file="${profile_dir}/mods_config.json"
-        python3 -c "
-import json, os
-p = '${cfg_file}'
-if os.path.isfile(p):
-    try:
-        with open(p, 'r') as f: data = json.load(f)
-        found = False
-        for m in data:
-            if m.get('name') == 'AnimatedMojang':
-                m['enabled'] = True
-                found = True
-        if not found:
-            data.append({'name': 'AnimatedMojang', 'enabled': True, 'order': len(data)})
-        with open(p, 'w') as f: json.dump(data, f, indent=2)
-    except Exception as e: print(f'mods_config error: {e}')
-" 2>/dev/null || true
+        echo "Deployed to profile mod dir: ${mod_dir}"
     fi
 done
+
 
 # Ensure dev_disableRenderMainMenuCubeMap:1 in all options.txt files
 python3 -c "
@@ -111,6 +94,21 @@ for p in targets:
             new_lines.append('dev_disableRenderMainMenuCubeMap:1\n')
         with open(p, 'w', encoding='utf-8') as f:
             f.writelines(new_lines)
+" 2>/dev/null || true
+
+# Purge obsolete pack UUID (8e4d2a10-4820-4b21-81d3-359f4d1e00a1) from all global_resource_packs.json files
+python3 -c "
+import glob, json
+for f in glob.glob('/sdcard/Android/media/org.levimc.launcher/minecraft/**/global_resource_packs.json', recursive=True):
+    try:
+        with open(f, 'r') as fp:
+            d = json.load(fp)
+        new_d = [p for p in d if p.get('pack_id') != '8e4d2a10-4820-4b21-81d3-359f4d1e00a1']
+        if len(new_d) != len(d):
+            with open(f, 'w') as fp:
+                json.dump(new_d, fp, indent=2)
+    except Exception:
+        pass
 " 2>/dev/null || true
 
 echo "=== Created LeviPack package ==="

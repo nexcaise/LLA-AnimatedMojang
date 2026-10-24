@@ -29,6 +29,12 @@ public:
     // Render the 2D animated title on active EGL render context
     bool renderTitle(float screenWidth, float screenHeight, int titleFrame, float titleAlpha = 1.0f);
 
+    // Capture clean background (Cave + Title) before UI buttons render
+    bool captureFadeBackground(float screenWidth, float screenHeight);
+
+    // Render clean background overlay over UI to fade buttons in slowly
+    bool renderFadeOverlay(float screenWidth, float screenHeight, float overlayAlpha);
+
     void destroy();
 
     bool isModelLoaded() const { return !mVertices.empty(); }
@@ -69,6 +75,17 @@ private:
     GLint mAttrTitlePos = -1;
     GLint mAttrTitleUv = -1;
 
+    // Fade Overlay 2D rendering resources (for slow button fade-in)
+    GLuint mFadeTexture = 0;
+    GLuint mFadeProgram = 0;
+    GLuint mFadeVbo = 0;
+    int mFadeTexWidth = 0;
+    int mFadeTexHeight = 0;
+    GLint mLocFadeAlpha = -1;
+    GLint mLocFadeTex = -1;
+    GLint mAttrFadePos = -1;
+    GLint mAttrFadeUv = -1;
+
     bool mGlReady = false;
     bool mGlFailed = false;
 
@@ -78,6 +95,9 @@ private:
 
     bool initTitleShaders();
     bool initTitleVbo();
+
+    bool initFadeShaders();
+    bool initFadeVbo();
 };
 
 } // namespace animated_mojang::scene

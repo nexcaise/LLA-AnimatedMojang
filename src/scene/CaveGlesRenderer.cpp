@@ -75,6 +75,20 @@ void CaveGlesRenderer::destroy() {
         glDeleteProgram(mTitleProgram);
         mTitleProgram = 0;
     }
+    if (mFadeTexture) {
+        glDeleteTextures(1, &mFadeTexture);
+        mFadeTexture = 0;
+    }
+    if (mFadeVbo) {
+        glDeleteBuffers(1, &mFadeVbo);
+        mFadeVbo = 0;
+    }
+    if (mFadeProgram) {
+        glDeleteProgram(mFadeProgram);
+        mFadeProgram = 0;
+    }
+    mFadeTexWidth = 0;
+    mFadeTexHeight = 0;
     mGlReady = false;
     mGlFailed = false;
 }
@@ -240,7 +254,14 @@ bool CaveGlesRenderer::initTexture() {
 }
 
 bool CaveGlesRenderer::ensureGlInitialized() {
-    if (mGlReady) return true;
+    if (mGlReady) {
+        // Detect Android EGL context recreation after app switch/minimize/reload
+        if (glIsProgram(mProgram) && glIsBuffer(mVbo) && glIsTexture(mAtlasTexture)) {
+            return true;
+        }
+        logger().warn("CaveGlesRenderer: OpenGL ES context was recreated or lost after app switch/reload. Re-initializing GPU resources...");
+        destroy();
+    }
     if (mGlFailed) return false;
 
     logger().info("CaveGlesRenderer: Initializing OpenGL ES resources on render thread...");
@@ -591,6 +612,191 @@ bool CaveGlesRenderer::render(float screenWidth, float screenHeight, const glm::
     if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
     glBlendFunc(prevBlendSrc, prevBlendDst);
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+
+    return true;
+}
+
+bool CaveGlesRenderer::initFadeShaders() {
+    static const char* kFadeVertexShader =
+        "attribute vec2 a_pos;\n"
+        "attribute vec2 a_uv;\n"
+        "varying vec2 v_uv;\n"
+        "void main() {\n"
+        "    gl_Position = vec4(a_pos, 0.0, 1.0);\n"
+        "    v_uv = a_uv;\n"
+        "}\n";
+
+    static const char* kFadeFragmentShader =
+        "precision mediump float;\n"
+        "varying vec2 v_uv;\n"
+        "uniform sampler2D u_fadeTex;\n"
+        "uniform float u_alpha;\n"
+        "void main() {\n"
+        "    vec4 col = texture2D(u_fadeTex, v_uv);\n"
+        "    gl_FragColor = vec4(col.rgb, u_alpha);\n"
+        "}\n";
+
+    GLuint vert = compileShader(GL_VERTEX_SHADER, kFadeVertexShader);
+    if (!vert) return false;
+
+    GLuint frag = compileShader(GL_FRAGMENT_SHADER, kFadeFragmentShader);
+    if (!frag) {
+        glDeleteShader(vert);
+        return false;
+    }
+
+    mFadeProgram = glCreateProgram();
+    glAttachShader(mFadeProgram, vert);
+    glAttachShader(mFadeProgram, frag);
+    glLinkProgram(mFadeProgram);
+
+    glDeleteShader(vert);
+    glDeleteShader(frag);
+
+    GLint linked = 0;
+    glGetProgramiv(mFadeProgram, GL_LINK_STATUS, &linked);
+    if (!linked) {
+        glDeleteProgram(mFadeProgram);
+        mFadeProgram = 0;
+        return false;
+    }
+
+    mLocFadeAlpha = glGetUniformLocation(mFadeProgram, "u_alpha");
+    mLocFadeTex = glGetUniformLocation(mFadeProgram, "u_fadeTex");
+    mAttrFadePos = glGetAttribLocation(mFadeProgram, "a_pos");
+    mAttrFadeUv = glGetAttribLocation(mFadeProgram, "a_uv");
+    return true;
+}
+
+bool CaveGlesRenderer::initFadeVbo() {
+    static const float kQuadVertices[] = {
+        // x, y, u, v
+        -1.0f, -1.0f, 0.0f, 0.0f,
+         1.0f, -1.0f, 1.0f, 0.0f,
+        -1.0f,  1.0f, 0.0f, 1.0f,
+         1.0f,  1.0f, 1.0f, 1.0f,
+    };
+
+    if (!mFadeVbo) {
+        glGenBuffers(1, &mFadeVbo);
+    }
+    glBindBuffer(GL_ARRAY_BUFFER, mFadeVbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(kQuadVertices), kQuadVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    return true;
+}
+
+bool CaveGlesRenderer::captureFadeBackground(float screenWidth, float screenHeight) {
+    int w = static_cast<int>(screenWidth);
+    int h = static_cast<int>(screenHeight);
+    if (w <= 0 || h <= 0) return false;
+
+    if (!mFadeProgram) {
+        if (!initFadeShaders() || !initFadeVbo()) {
+            return false;
+        }
+    }
+
+    GLint prevActiveTex = 0; glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    GLint prevTex2D = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+
+    glActiveTexture(GL_TEXTURE0);
+
+    if (mFadeTexWidth != w || mFadeTexHeight != h || !mFadeTexture) {
+        mFadeTexWidth = w;
+        mFadeTexHeight = h;
+        if (!mFadeTexture) {
+            glGenTextures(1, &mFadeTexture);
+        }
+        glBindTexture(GL_TEXTURE_2D, mFadeTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    } else {
+        glBindTexture(GL_TEXTURE_2D, mFadeTexture);
+    }
+
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+
+    glBindTexture(GL_TEXTURE_2D, prevTex2D);
+    glActiveTexture(prevActiveTex);
+    return true;
+}
+
+bool CaveGlesRenderer::renderFadeOverlay(float screenWidth, float screenHeight, float overlayAlpha) {
+    if (overlayAlpha <= 0.001f || !mFadeTexture || !mFadeProgram || !mFadeVbo) {
+        return false;
+    }
+
+    // Save preceding state
+    GLint prevFbo = 0; glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    GLint prevViewport[4] = {0, 0, 0, 0}; glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLint prevProgram = 0; glGetIntegerv(GL_CURRENT_PROGRAM, &prevProgram);
+    GLint prevVbo = 0; glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &prevVbo);
+    GLint prevVao = 0; glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &prevVao);
+    glBindVertexArray(0);
+    GLint prevActiveTex = 0; glGetIntegerv(GL_ACTIVE_TEXTURE, &prevActiveTex);
+    GLint prevTex2D = 0; glGetIntegerv(GL_TEXTURE_BINDING_2D, &prevTex2D);
+    GLboolean prevDepthTest = glIsEnabled(GL_DEPTH_TEST);
+    GLboolean prevCullFace = glIsEnabled(GL_CULL_FACE);
+    GLboolean prevBlend = glIsEnabled(GL_BLEND);
+    GLint prevBlendSrc = 0, prevBlendDst = 0;
+    glGetIntegerv(GL_BLEND_SRC_RGB, &prevBlendSrc);
+    glGetIntegerv(GL_BLEND_DST_RGB, &prevBlendDst);
+    GLboolean prevDepthMask = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &prevDepthMask);
+    GLboolean prevColorMask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    glGetBooleanv(GL_COLOR_WRITEMASK, prevColorMask);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glViewport(0, 0, static_cast<GLsizei>(screenWidth), static_cast<GLsizei>(screenHeight));
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDepthMask(GL_FALSE);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    glUseProgram(mFadeProgram);
+    glUniform1f(mLocFadeAlpha, overlayAlpha);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, mFadeTexture);
+    glUniform1i(mLocFadeTex, 0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, mFadeVbo);
+    constexpr GLsizei stride = 4 * sizeof(float);
+    if (mAttrFadePos >= 0) {
+        glEnableVertexAttribArray(mAttrFadePos);
+        glVertexAttribPointer(mAttrFadePos, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(0));
+    }
+    if (mAttrFadeUv >= 0) {
+        glEnableVertexAttribArray(mAttrFadeUv);
+        glVertexAttribPointer(mAttrFadeUv, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<const void*>(2 * sizeof(float)));
+    }
+
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    if (mAttrFadePos >= 0) glDisableVertexAttribArray(mAttrFadePos);
+    if (mAttrFadeUv >= 0) glDisableVertexAttribArray(mAttrFadeUv);
+
+    // Restore state
+    glBindBuffer(GL_ARRAY_BUFFER, prevVbo);
+    glBindVertexArray(prevVao);
+    glBindTexture(GL_TEXTURE_2D, prevTex2D);
+    glActiveTexture(prevActiveTex);
+    glUseProgram(prevProgram);
+
+    glColorMask(prevColorMask[0], prevColorMask[1], prevColorMask[2], prevColorMask[3]);
+    glDepthMask(prevDepthMask);
+    if (prevDepthTest) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (prevCullFace) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (prevBlend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    glBlendFunc(prevBlendSrc, prevBlendDst);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    glBindFramebuffer(GL_FRAMEBUFFER, prevFbo);
 
     return true;
 }

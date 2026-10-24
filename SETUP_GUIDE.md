@@ -1,43 +1,85 @@
-# Animated Mojang (Setup & Architecture Guide)
+# Animated Mojang — Setup & Usage Guide
 
-## Overview
-This package contains the complete, hardware-accelerated **Animated Mojang** mod for **Minecraft Bedrock Edition (Android ARM64)**.
+A setup and technical reference guide for **Animated Mojang (Android ARM64)**.
 
-It requires **zero resource packs** and **zero companion mod loaders**.
-
----
-
-## What's Included
-- **`animated_mojang.levipack`**:
-  - Native C++ shared library (`libAnimatedMojang.so`) compiled for Android ARM64 (ELF64).
-  - 3D Cave mesh (`normal_cave.mesh`), textures, shaders, and configuration.
-  - Self-contained manifest for LeviLauncher.
+**Description**: `by SpyGamingOG`
 
 ---
 
-## Installation
+## 1. Quick Start Installation
 
-### LeviLauncher (LeviLaunchroid)
-1. Open **LeviLauncher** -> **Mods** tab -> **Import** -> Select `animated_mojang.levipack`.
-2. Ensure the mod toggle is **Enabled**.
-3. Launch Minecraft.
+### Method A: LeviLauncher (Recommended)
+1. Copy or download **`animated_mojang.levipack`**.
+2. Open **LeviLauncher** -> **Mods** -> **Import** -> Select `animated_mojang.levipack`.
+3. Enable the mod in the list and launch Minecraft.
+
+### Method B: Manual Deployment
+Extract `animated_mojang.levipack` (it is a standard ZIP archive) into your game or launcher directory:
+```bash
+# Target path structure:
+<game_root>/mods/AnimatedMojang/
+├── libAnimatedMojang.so
+├── manifest.json
+└── tooth.json
+```
 
 ---
 
-## Technical Hook Topology (Android ARM64)
-- **JSON UI Screen Enforcement**: RVA `0x0974E844` (`ScreenTechStackSelector::getTechStackForScreen`)
-- **Main Menu Open**: RVA `0x0A2DF314` (`StartMenuScreenController::$onOpen`)
-- **Navigation Buttons**:
-  - Play: RVA `0x0A31344C`
-  - Settings: RVA `0x0A3171AC`
-  - Realms: RVA `0x0A3174DC`
-  - Dressing Room: RVA `0x0A31815C`
-  - Marketplace: RVA `0x0A3187A4`
-  - Menu Exit / Back: RVA `0x0A567540`
-- **Panorama Suppression**: RVA `0x0967FA98` (`PanoramaRenderer::$render`)
-- **Cubemap Background Screen Suppression**: RVA `0x09B7C9E0` (`CubemapBackgroundScreen::$render`)
-- **In-Game State Detection**:
-  - InGame HUD: RVA `0x09ACC828` (`InGamePlayScreen::render`)
-  - World Render: RVA `0x09ACD4C8` (`InGamePlayScreen::_renderLevel`)
-  - Leave Game: RVA `0x09800FF8` (`ClientInstance::requestLeaveGame`)
-- **3D Cave & Title GPU Render**: GOT Relocation slot RVA `0x132893d8` (`glClear`)
+## 2. Supported Versions
+
+- **Minecraft Bedrock 1.26.52.3**
+- **Minecraft Bedrock 1.26.51.1**
+- **Minecraft Bedrock 1.26.45.1**
+- **Minecraft Bedrock 1.26.44.3**
+- Future 1.26.x minor builds via universal AArch64 pattern signatures (`hookSignature`) and dynamic ELF GOT resolution.
+
+---
+
+## 3. Configuration Reference
+
+The configuration file is automatically created at `mods/AnimatedMojang/config/config.json`:
+
+| Parameter | Type | Default | Description |
+|---|:---:|:---:|---|
+| `enabled` | boolean | `true` | Master mod toggle. |
+| `preferJsonMainMenu` | boolean | `false` | When false, renders the Minecraft title sequence directly via GPU. |
+| `minecraftTitleAnimation` | boolean | `true` | Enables the 69-frame animated title sequence. |
+| `caveBackground` | boolean | `true` | Enables real-time 3D OpenGL ES cave background rendering. |
+| `restyleLoadingProgress` | boolean | `true` | Restyles the game loading progress bar to Crimson theme. |
+| `replayOnReturnToMenu` | boolean | `true` | Replays the camera flight when returning from a world or sub-screen. |
+| `maxPresentationSeconds` | float | `15.0` | Maximum timeout before automatically falling back to idle. |
+| `blockMenuInputDuringIntro` | boolean | `true` | Blocks button clicks until camera flight and button fade-in complete. |
+
+---
+
+## 4. Cinematic Intro & Transition Timeline
+
+- **0.0s – 4.0s (Camera Flight)**: 3D camera spline flight through the cave to the title viewpoint (`cameraFlightMs = 4000.0`). Start buttons and title remain hidden.
+- **4.0s – 6.0s (Title Sequence)**: Camera holds at the title viewpoint while the hardware-accelerated animated Minecraft title plays across 69 frames (`titleDelayMs = 4000.0`).
+- **6.0s – 7.5s (Button Fade-In)**: Start screen buttons appear and smoothly fade in over 1.5 seconds (`menuFadeMs = 1500.0`) via clean GPU background frame capture and smoothstep overlay blending.
+- **7.5s+ (Interactive Idle)**: Full interactive idle state with zero GPU overlay overhead.
+- **Sub-Menu Navigation**: Clicking Play, Settings, Realms, Dressing Room, or Marketplace triggers a smooth camera glide to dedicated viewpoints. Exiting any sub-menu smoothly glides back to Main.
+
+---
+
+## 5. Building from Source
+
+### Prerequisites
+- Linux x86_64, Android Termux, or WSL2.
+- Android NDK r25c+ (or clang 14+).
+- CMake 3.22+ and Ninja.
+
+### Build Command
+```bash
+./package_mod.sh
+```
+This builds `libAnimatedMojang.so`, bundles the assets, and outputs `dist/animated_mojang.levipack`.
+
+---
+
+## 6. Architecture Highlights
+
+1. **Zero Resource Pack (Zero RP)**: Functional memory detours directly suppress RenderDragon's vanilla 2D panorama and Ancient City cubemap.
+2. **Multi-Segment Memory Scanner**: Scans all readable and executable memory mappings in `/proc/self/maps` using `std::memchr`, eliminating issues with split ELF segments.
+3. **Dynamic ELF GOT Resolution**: Discovers GOT slots for `glClear`, `glColorMask`, and `eglSwapBuffers` at runtime via `PT_DYNAMIC` / `DT_JMPREL` relocation parsing, avoiding hardcoded GOT RVAs.
+4. **EGL Context Recovery**: Automatically detects Android EGL context invalidation on app switch or minimize, rebuilding shaders, VBOs, and textures seamlessly.

@@ -175,21 +175,38 @@ public:
         lastTime = std::max(lastTime, nowMs);
     static constexpr double kPageTransitionDurationMs = 900.0;
 
-        // Resolve the old interpolation first, so interrupted transitions never jump.
-        if (transitionAt >= 0) {
-            const float t = cameraEase(static_cast<float>((clock - transitionAt) / kPageTransitionDurationMs));
-            for (std::size_t i = 0; i < pose.size(); ++i) pose[i] = start[i] + (target[i] - start[i]) * t;
-            if (clock - transitionAt >= kPageTransitionDurationMs) transitionAt = -1;
-        }
         if (observedPage && (!observed || *observedPage != page)) {
             page = *observedPage;
             if (page != CavePage::Main) openingDone = true;
             start = pose;
             target = cavePagePose(page);
             transitionAt = observed ? clock : -1;
-            if (!observed && (openingDone || frame.phase == Phase::MenuIdle)) pose = target;
+            if (!observed && (openingDone || frame.phase == Phase::MenuIdle)) {
+                pose = target;
+                transitionAt = -1;
+            }
             observed = true;
             ++revision;
+        }
+
+        // Smooth interpolation for all sub-menus and return to start screen
+        if (transitionAt >= 0) {
+            const float progress = std::clamp(static_cast<float>((clock - transitionAt) / kPageTransitionDurationMs), 0.0f, 1.0f);
+            const float t = cameraEase(progress);
+            for (std::size_t i = 0; i < pose.size(); ++i) {
+                if (i == 3) { // Yaw: take shortest angular path
+                    float deltaYaw = target[3] - start[3];
+                    while (deltaYaw > 180.f) deltaYaw -= 360.f;
+                    while (deltaYaw < -180.f) deltaYaw += 360.f;
+                    pose[3] = start[3] + deltaYaw * t;
+                } else {
+                    pose[i] = start[i] + (target[i] - start[i]) * t;
+                }
+            }
+            if (clock - transitionAt >= kPageTransitionDurationMs) {
+                pose = target;
+                transitionAt = -1;
+            }
         }
         bool moving = transitionAt >= 0;
         if (!observed && frame.phase == Phase::Waiting) {

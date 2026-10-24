@@ -23,6 +23,17 @@ bool MyMod::load() {
     if (dladdr(reinterpret_cast<void*>(&MyMod::getInstance), &dlinfo) && dlinfo.dli_fname) {
         candidates.push_back(std::filesystem::path(dlinfo.dli_fname).parent_path());
     }
+
+    std::error_code ec;
+    auto launcherBase = std::filesystem::path("/sdcard/Android/media/org.levimc.launcher/minecraft");
+    if (std::filesystem::exists(launcherBase, ec)) {
+        for (const auto& entry : std::filesystem::directory_iterator(launcherBase, ec)) {
+            if (entry.is_directory(ec)) {
+                candidates.push_back(entry.path() / "mods" / "AnimatedMojang");
+            }
+        }
+    }
+
     candidates.push_back("/sdcard/Android/media/org.levimc.launcher/minecraft/com.mojang.minecraftpe/mods/AnimatedMojang");
     candidates.push_back("/sdcard/MG/AnimatedMojang");
     candidates.push_back("/sdcard/Download/AnimatedMojang");
@@ -31,7 +42,7 @@ bool MyMod::load() {
     candidates.push_back("/sdcard/Android/data/com.mojang.minecraftpe/files/levilamina/mods/AnimatedMojang");
 
     for (const auto& candidate : candidates) {
-        if (std::filesystem::exists(candidate / "resources" / "data" / "normal_cave.mesh")) {
+        if (std::filesystem::exists(candidate / "resources" / "data" / "normal_cave.mesh", ec)) {
             setModDir(candidate);
             getLogger().info("Resolved mod directory: ", candidate.string());
             break;
@@ -40,7 +51,7 @@ bool MyMod::load() {
 
     // Check for local mod resources directory
     auto cfgPath = getConfigDir() / "config.json";
-    if (std::filesystem::exists(cfgPath)) {
+    if (std::filesystem::exists(cfgPath, ec)) {
         try {
             std::ifstream f(cfgPath);
             nlohmann::json j = nlohmann::json::parse(f);
@@ -57,11 +68,8 @@ bool MyMod::load() {
         }
     }
 
-
+    // Start mod hooks; cave loading and resource folder files are loaded right after normal loading completes
     animated_mojang::client::start(mConfig, getModDir());
-    if (mConfig.enabled && mConfig.caveBackground) {
-        animated_mojang::client::prepareCave(getModDir());
-    }
 
     getLogger().info("Animated Mojang loaded and enabled successfully for Bedrock!");
     return true;

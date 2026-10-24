@@ -62,6 +62,12 @@ LL_API bool hookGotSlot(uintptr_t gotRva, void* detour, void** original);
 /// Hook a function by an IDA-style byte pattern signature, with optional fast-path fallback RVA
 LL_API bool hookSignature(const std::string& pattern, void* detour, void** original, uintptr_t fallbackRva = 0);
 
+/// Hook a function via GOT relocation by dynamic symbol name, with optional fallback GOT RVA
+LL_API bool hookGotSymbol(const char* symbolName, void* detour, void** original, uintptr_t fallbackGotRva = 0);
+
+/// Find absolute address of an IDA-style byte pattern signature in libminecraftpe.so
+LL_API uintptr_t findSignature(const std::string& pattern);
+
 /// Resolve a symbol dynamically from libminecraftpe.so or loaded libraries
 LL_API void* findMinecraftSymbol(const char* symbolName);
 
@@ -82,6 +88,24 @@ inline bool hookRva(uintptr_t rva, Fn detour, Fn* original) {
     return hookRva(rva,
                    reinterpret_cast<void*>(detour),
                    reinterpret_cast<void**>(original));
+}
+
+/// Typed helper for hooking by IDA signature
+template <typename Fn>
+inline bool hookSignature(const std::string& pattern, Fn detour, Fn* original, uintptr_t fallbackRva = 0) {
+    return hookSignature(pattern,
+                         reinterpret_cast<void*>(detour),
+                         reinterpret_cast<void**>(original),
+                         fallbackRva);
+}
+
+/// Typed helper for hooking GOT relocation by symbol name
+template <typename Fn>
+inline bool hookGotSymbol(const char* symbolName, Fn detour, Fn* original, uintptr_t fallbackGotRva = 0) {
+    return hookGotSymbol(symbolName,
+                         reinterpret_cast<void*>(detour),
+                         reinterpret_cast<void**>(original),
+                         fallbackGotRva);
 }
 
 namespace internal {

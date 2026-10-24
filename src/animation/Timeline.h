@@ -7,9 +7,9 @@ namespace animated_mojang {
 enum class Phase { Waiting, MenuOpening, MenuIdle };
 
 struct Timing {
-    double titleDelayMs      = 0.0;
-    double menuRevealMs      = 2700.0;
-    double menuFadeMs        = 500.0;
+    double titleDelayMs      = 4000.0;
+    double menuRevealMs      = 6000.0;
+    double menuFadeMs        = 1500.0;
     double cameraFlightMs    = 4000.0;
     double maxPresentationMs = 15000.0;
     double maxFrameStepMs    = 100.0;
@@ -46,7 +46,7 @@ public:
             && (!animateTitle || mNow - mStartedAt >= mTiming.maxPresentationMs
                 || elapsed
                        >= std::max({mTiming.menuRevealMs + mTiming.menuFadeMs,
-                                   mTiming.titleDelayMs + 69.0 * 40.0,
+                                   mTiming.titleDelayMs + 2000.0,
                                    mTiming.cameraFlightMs}))) {
             mPhase = Phase::MenuIdle;
         }
@@ -54,12 +54,17 @@ public:
         result.phase     = mPhase;
         result.elapsedMs = elapsed;
         if (mPhase == Phase::MenuOpening) {
-            result.menuAlpha = unit((elapsed - mTiming.menuRevealMs) / mTiming.menuFadeMs);
+            const double rawT = unit((elapsed - mTiming.menuRevealMs) / mTiming.menuFadeMs);
+            result.menuAlpha  = static_cast<float>(rawT * (2.0 - rawT)); // out_quad smooth deceleration
             if (elapsed >= mTiming.titleDelayMs) {
-                result.titleFrame = std::clamp(static_cast<int>((elapsed - mTiming.titleDelayMs) / 40.0), 0, 68);
+                // Title animates over 2.0s (from 4000ms to 6000ms), 69 frames (0 to 68)
+                const double titleProgress = (elapsed - mTiming.titleDelayMs) / 2000.0;
+                result.titleFrame = std::clamp(static_cast<int>(titleProgress * 68.0), 0, 68);
+            } else {
+                result.titleFrame = -1;
             }
         } else if (mPhase == Phase::MenuIdle) {
-            result.menuAlpha  = 1;
+            result.menuAlpha  = 1.0f;
             result.titleFrame = 68;
         }
         return result;

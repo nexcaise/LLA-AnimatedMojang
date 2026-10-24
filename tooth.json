@@ -5,7 +5,8 @@
   "version": "1.0.0",
   "info": {
     "name": "Animated Mojang (Android ARM64)",
-    "description": "Animated Minecraft title, 60 FPS real-time 3D cave background, and cinematic camera transitions for Minecraft Bedrock on Android ARM64. Zero RP and direct native function hooks.",
+    "author": "SpyGamingOG",
+    "description": "by SpyGamingOG",
     "tags": [
       "platform:android-arm64",
       "type:mod",

@@ -5,6 +5,9 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <dlfcn.h>
+#include <elf.h>
+#include <link.h>
+#include <vector>
 
 namespace ll::memory {
 
@@ -170,6 +173,219 @@ bool hookGotSlot(uintptr_t gotRva, void* detour, void** original) {
     }
     *slot = detour;
     return true;
+}
+
+// ----------------------------------------------------------------------------
+// Multi-Version Runtime Pattern Scanner (IDA-style hex mask)
+// ----------------------------------------------------------------------------
+struct PatternByte {
+    uint8_t value{0};
+    bool isWildcard{true};
+};
+
+static std::vector<PatternByte> parseIdaPattern(std::string_view pattern) {
+    std::vector<PatternByte> bytes;
+    const char* p = pattern.data();
+    const char* end = p + pattern.size();
+
+    while (p < end) {
+        if (*p == ' ') {
+            p++;
+            continue;
+        }
+        if (*p == '?') {
+            bytes.push_back({0, true});
+            p++;
+            if (p < end && *p == '?') p++;
+        } else {
+            char hex[3] = {p[0], (p + 1 < end && *(p + 1) != ' ') ? *(p + 1) : '\0', '\0'};
+            bytes.push_back({static_cast<uint8_t>(std::strtoul(hex, nullptr, 16)), false});
+            p += (hex[1] != '\0') ? 2 : 1;
+        }
+    }
+    return bytes;
+}
+
+struct MemorySegment {
+    uintptr_t start;
+    size_t size;
+};
+
+static std::vector<MemorySegment> sSegments;
+
+static void discoverSegments() {
+    if (!sSegments.empty()) return;
+
+    FILE* fp = fopen("/proc/self/maps", "r");
+    if (fp) {
+        char line[512];
+        while (fgets(line, sizeof(line), fp)) {
+            if (strstr(line, "libminecraftpe.so") && (strstr(line, "r-xp") || strstr(line, "r--p"))) {
+                uintptr_t start = 0, end = 0;
+                if (sscanf(line, "%lx-%lx", &start, &end) == 2 && end > start) {
+                    sSegments.push_back({start, static_cast<size_t>(end - start)});
+                }
+            }
+        }
+        fclose(fp);
+    }
+
+    if (sSegments.empty()) {
+        uintptr_t base = getMinecraftBase();
+        if (base) {
+            sSegments.push_back({base, 0x15000000}); // 336MB fallback
+        }
+    }
+}
+
+uintptr_t findSignature(const std::string& patternStr) {
+    discoverSegments();
+    if (sSegments.empty()) return 0;
+
+    auto pattern = parseIdaPattern(patternStr);
+    if (pattern.empty()) return 0;
+
+    size_t anchorIdx = 0;
+    while (anchorIdx < pattern.size() && pattern[anchorIdx].isWildcard) {
+        anchorIdx++;
+    }
+    if (anchorIdx >= pattern.size()) return 0;
+
+    uint8_t anchorVal = pattern[anchorIdx].value;
+
+    for (const auto& seg : sSegments) {
+        if (seg.size < pattern.size()) continue;
+
+        const uint8_t* startPtr = reinterpret_cast<const uint8_t*>(seg.start);
+        const size_t maxScan = seg.size - pattern.size();
+        const uint8_t* scanPtr = startPtr + anchorIdx;
+        const uint8_t* endPtr = startPtr + seg.size;
+
+        while (scanPtr < endPtr) {
+            const uint8_t* match = static_cast<const uint8_t*>(std::memchr(scanPtr, anchorVal, endPtr - scanPtr));
+            if (!match) break;
+
+            const uint8_t* candidate = match - anchorIdx;
+            if (candidate >= startPtr && candidate <= startPtr + maxScan) {
+                bool fullMatch = true;
+                for (size_t j = 0; j < pattern.size(); ++j) {
+                    if (!pattern[j].isWildcard && candidate[j] != pattern[j].value) {
+                        fullMatch = false;
+                        break;
+                    }
+                }
+                if (fullMatch) {
+                    return reinterpret_cast<uintptr_t>(candidate);
+                }
+            }
+            scanPtr = match + 1;
+        }
+    }
+    return 0;
+}
+
+bool hookSignature(const std::string& pattern, void* detour, void** original, uintptr_t fallbackRva) {
+    uintptr_t addr = findSignature(pattern);
+    if (addr != 0) {
+        uintptr_t base = getMinecraftBase();
+        uintptr_t rva = base ? (addr - base) : addr;
+        char buf[96];
+        snprintf(buf, sizeof(buf), "[AnimatedMojang] Hooked signature at %p (RVA 0x%lx)", reinterpret_cast<void*>(addr), rva);
+        Logger::getInstance().info(buf);
+        return hook(reinterpret_cast<void*>(addr), detour, original);
+    }
+
+    if (fallbackRva != 0) {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "[AnimatedMojang] Pattern not matched, using version RVA fallback 0x%lx", fallbackRva);
+        Logger::getInstance().warn(buf);
+        return hookRva(fallbackRva, detour, original);
+    }
+
+    Logger::getInstance().error("[AnimatedMojang] hookSignature failed: pattern not matched and no fallback RVA");
+    return false;
+}
+
+// ----------------------------------------------------------------------------
+// Multi-Version ELF Dynamic GOT Relocation Resolver
+// ----------------------------------------------------------------------------
+static uintptr_t findGotSlotRvaFromElf(const char* symbolName) {
+    struct SearchContext {
+        const char* symName;
+        uintptr_t foundRva;
+    } ctx = { symbolName, 0 };
+
+    dl_iterate_phdr([](struct dl_phdr_info* info, size_t, void* data) -> int {
+        auto* sc = static_cast<SearchContext*>(data);
+        if (!info->dlpi_name || !strstr(info->dlpi_name, "libminecraftpe.so")) {
+            return 0;
+        }
+
+        const Elf64_Phdr* dynamicPhdr = nullptr;
+        for (int i = 0; i < info->dlpi_phnum; ++i) {
+            if (info->dlpi_phdr[i].p_type == PT_DYNAMIC) {
+                dynamicPhdr = &info->dlpi_phdr[i];
+                break;
+            }
+        }
+        if (!dynamicPhdr) return 0;
+
+        uintptr_t dynamicAddr = info->dlpi_addr + dynamicPhdr->p_vaddr;
+        const auto* dyn = reinterpret_cast<const Elf64_Dyn*>(dynamicAddr);
+
+        uintptr_t jmprel = 0;
+        size_t pltrelsz = 0;
+        uintptr_t symtab = 0;
+        uintptr_t strtab = 0;
+
+        for (; dyn->d_tag != DT_NULL; ++dyn) {
+            if (dyn->d_tag == DT_JMPREL) jmprel = dyn->d_un.d_ptr;
+            else if (dyn->d_tag == DT_PLTRELSZ) pltrelsz = dyn->d_un.d_val;
+            else if (dyn->d_tag == DT_SYMTAB) symtab = dyn->d_un.d_ptr;
+            else if (dyn->d_tag == DT_STRTAB) strtab = dyn->d_un.d_ptr;
+        }
+
+        if (!jmprel || !pltrelsz || !symtab || !strtab) return 0;
+
+        if (jmprel < info->dlpi_addr) jmprel += info->dlpi_addr;
+        if (symtab < info->dlpi_addr) symtab += info->dlpi_addr;
+        if (strtab < info->dlpi_addr) strtab += info->dlpi_addr;
+
+        const auto* rela = reinterpret_cast<const Elf64_Rela*>(jmprel);
+        const auto* syms = reinterpret_cast<const Elf64_Sym*>(symtab);
+        const char* strings = reinterpret_cast<const char*>(strtab);
+
+        size_t numRelas = pltrelsz / sizeof(Elf64_Rela);
+        for (size_t i = 0; i < numRelas; ++i) {
+            uint32_t symIdx = ELF64_R_SYM(rela[i].r_info);
+            const char* name = strings + syms[symIdx].st_name;
+            if (strcmp(name, sc->symName) == 0) {
+                sc->foundRva = rela[i].r_offset;
+                return 1;
+            }
+        }
+        return 0;
+    }, &ctx);
+
+    return ctx.foundRva;
+}
+
+bool hookGotSymbol(const char* symbolName, void* detour, void** original, uintptr_t fallbackGotRva) {
+    uintptr_t rva = findGotSlotRvaFromElf(symbolName);
+    if (rva != 0) {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "[AnimatedMojang] Dynamically resolved GOT slot for %s at RVA 0x%lx", symbolName, rva);
+        Logger::getInstance().info(buf);
+        return hookGotSlot(rva, detour, original);
+    }
+    if (fallbackGotRva != 0) {
+        char buf[96];
+        snprintf(buf, sizeof(buf), "[AnimatedMojang] Falling back to version GOT RVA 0x%lx for %s", fallbackGotRva, symbolName);
+        Logger::getInstance().warn(buf);
+        return hookGotSlot(fallbackGotRva, detour, original);
+    }
+    Logger::getInstance().error(std::string("[AnimatedMojang] hookGotSymbol failed for: ") + symbolName);
+    return false;
 }
 
 } // namespace ll::memory
